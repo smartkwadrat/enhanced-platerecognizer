@@ -1,5 +1,5 @@
 {
-  "domain": "enhanced-platerecognizer",
+  "domain": "enhanced_platerecognizer",
   "name": "Enhanced Plate Recognizer",
   "version": "1.0.0",
   "config_flow": true,
