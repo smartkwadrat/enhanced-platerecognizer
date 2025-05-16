@@ -2,6 +2,6 @@
 
 Fork of this integration: https://github.com/robmarkcole/HASS-plate-recognizer
 
-**Version 0.1.5**
+**Version 0.1.6**
 
 TEST 2
