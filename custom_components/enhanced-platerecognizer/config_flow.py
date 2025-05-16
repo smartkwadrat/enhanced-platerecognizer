@@ -57,13 +57,6 @@ class EnhancedPlateRecognizerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
             return self.async_abort(reason="no_cameras")
 
         if user_input is not None:
-            save_folder = user_input.get(CONF_SAVE_FILE_FOLDER)
-            if save_folder:
-                if not os.path.isdir(save_folder):
-                    try:
-                        os.makedirs(save_folder, exist_ok=True)
-                    except (OSError, PermissionError):
-                        errors[CONF_SAVE_FILE_FOLDER] = "invalid_folder"
 
             camera = user_input[CONF_SOURCE]
             await self.async_set_unique_id(f"{DOMAIN}_{camera}")
@@ -80,7 +73,6 @@ class EnhancedPlateRecognizerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
             vol.Required(CONF_API_KEY): str,
             vol.Required(CONF_SOURCE): vol.In(camera_options),
             vol.Optional(CONF_REGION, default="pl"): vol.In(REGIONS),
-            vol.Optional(CONF_SAVE_FILE_FOLDER): str,
             vol.Optional(CONF_SAVE_TIMESTAMPED_FILE, default=True): bool,
             vol.Optional(CONF_ALWAYS_SAVE_LATEST_FILE, default=True): bool,
             vol.Optional(CONF_CONSECUTIVE_CAPTURES, default=1): vol.All(
@@ -134,10 +126,6 @@ class EnhancedPlateRecognizerOptionsFlow(config_entries.OptionsFlow):
                 CONF_REGION,
                 default=options.get(CONF_REGION, data.get(CONF_REGION, "pl"))
             ): vol.In(REGIONS),
-            vol.Optional(
-                CONF_SAVE_FILE_FOLDER,
-                default=options.get(CONF_SAVE_FILE_FOLDER, data.get(CONF_SAVE_FILE_FOLDER, ""))
-            ): str,
             vol.Optional(
                 CONF_SAVE_TIMESTAMPED_FILE,
                 default=options.get(CONF_SAVE_TIMESTAMPED_FILE, data.get(CONF_SAVE_TIMESTAMPED_FILE, True))

@@ -1,0 +1,121 @@
+{
+  "config": {
+    "title": "Enhanced PlateRecognizer",
+    "step": {
+      "user": {
+        "title": "Konfiguracja Enhanced PlateRecognizer",
+        "description": "Skonfiguruj rozpoznawanie tablic rejestracyjnych z zaawansowanymi opcjami",
+        "data": {
+          "name": "Nazwa",
+          "api_key": "Klucz API",
+          "source": "Kamera",
+          "region": "Region tablic rejestracyjnych",
+          "save_timestamped_file": "Zapisuj pliki z datą i czasem",
+          "always_save_latest_file": "Zawsze zapisuj ostatnie zdjęcie",
+          "consecutive_captures": "Liczba kolejnych zdjęć (1-5)",
+          "capture_interval": "Odstęp między zdjęciami (sek)",
+          "max_images": "Maksymalna liczba przechowywanych zdjęć (1-30)",
+          "tolerate_one_mistake": "Toleruj pomyłkę jednego znaku"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Ta kamera jest już skonfigurowana",
+      "invalid_api_key": "Nieprawidłowy klucz API",
+      "invalid_folder": "Nieprawidłowa ścieżka folderu",
+      "cannot_connect": "Nie można połączyć się z API"
+    },
+    "abort": {
+      "already_configured": "Ta kamera jest już skonfigurowana z Enhanced PlateRecognizer",
+      "no_cameras": "Nie znaleziono dostępnych kamer"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje Enhanced PlateRecognizer",
+        "description": "Dostosuj zaawansowane ustawienia rozpoznawania tablic",
+        "data": {
+          "region": "Region dla tablic rejestracyjnych",
+          "save_timestamped_file": "Zapisuj pliki z datą i czasem",
+          "always_save_latest_file": "Zawsze zapisuj ostatnie zdjęcie",
+          "consecutive_captures": "Liczba kolejnych zdjęć (1-5)",
+          "capture_interval": "Odstęp między zdjęciami (sek)",
+          "max_images": "Maksymalna liczba przechowywanych zdjęć (1-30)",
+          "tolerate_one_mistake": "Toleruj pomyłkę jednego znaku"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "known_plate_detected": {
+        "name": "Wykrycie znanej tablicy",
+        "state": {
+          "wykryto": "Wykryto",
+          "brak": "Brak"
+        }
+      }
+    },
+    "sensor": {
+      "recognized_car": {
+        "name": "Rozpoznany samochód"
+      },
+      "last_recognized_car": {
+        "name": "Ostatnio rozpoznane tablice"
+      },
+      "formatted_car_plates": {
+        "name": "Znane tablice rejestracyjne"
+      }
+    },
+    "image_processing": {
+      "enhanced_platerecognizer": {
+        "name": "Rozpoznawanie tablic"
+      }
+    }
+  },
+  "services": {
+    "scan": {
+      "name": "Skanuj kamerę",
+      "description": "Wykonuje rozpoznanie tablic dla wskazanej kamery lub wszystkich kamer."
+    },
+    "add_plate": {
+      "name": "Dodaj tablicę",
+      "description": "Dodaje nową tablicę do listy znanych tablic.",
+      "fields": {
+        "plate": {
+          "name": "Tablica rejestracyjna",
+          "description": "Numer tablicy do dodania"
+        },
+        "owner": {
+          "name": "Właściciel",
+          "description": "Nazwa właściciela (opcjonalnie)"
+        }
+      }
+    },
+    "remove_plate": {
+      "name": "Usuń tablicę",
+      "description": "Usuwa tablicę z listy znanych tablic.",
+      "fields": {
+        "plate": {
+          "name": "Tablica rejestracyjna",
+          "description": "Numer tablicy do usunięcia"
+        }
+      }
+    },
+    "clean_images": {
+      "name": "Czyść zdjęcia",
+      "description": "Usuwa najstarsze zdjęcia, pozostawiając tylko określoną liczbę najnowszych.",
+      "fields": {
+        "folder": {
+          "name": "Folder",
+          "description": "Ścieżka folderu ze zdjęciami (opcjonalnie)"
+        },
+        "max_images": {
+          "name": "Maksymalna liczba zdjęć",
+          "description": "Ile najnowszych zdjęć ma zostać"
+        }
+      }
+    }
+  }
+}

@@ -33,13 +33,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     """Set up Enhanced PlateRecognizer from a config entry."""
     config = entry.data
     options = entry.options
+    
+    # Ustalamy stałą ścieżkę do katalogu Tablice
+    save_file_folder = os.path.join(hass.config.path(), "www", "Tablice")
+
+    # Sprawdzamy czy katalog istnieje - poprawione wcięcia
+    if not os.path.isdir(save_file_folder):
+        try:
+            os.makedirs(save_file_folder, exist_ok=True)
+            _LOGGER.info("Created directory: %s", save_file_folder)
+        except OSError as err:
+            _LOGGER.warning("Failed to create directory %s: %s", save_file_folder, err)
 
     camera_entity = config[CONF_SOURCE]
     api_key = config[CONF_API_KEY]
     name = config.get(CONF_NAME, f"Enhanced PlateRecognizer {camera_entity}")
 
     region = options.get(CONF_REGION, config.get(CONF_REGION))
-    save_file_folder = options.get(CONF_SAVE_FILE_FOLDER, config.get(CONF_SAVE_FILE_FOLDER))
+    # Nie nadpisujemy save_file_folder z konfiguracji - używamy ustalonej wcześniej ścieżki
     save_timestamped_file = options.get(
         CONF_SAVE_TIMESTAMPED_FILE, config.get(CONF_SAVE_TIMESTAMPED_FILE, True)
     )
@@ -59,12 +70,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         CONF_TOLERATE_ONE_MISTAKE, config.get(CONF_TOLERATE_ONE_MISTAKE, False)
     )
 
-    if save_file_folder and not os.path.isdir(save_file_folder):
-        try:
-            os.makedirs(save_file_folder, exist_ok=True)
-            _LOGGER.info("Created directory: %s", save_file_folder)
-        except OSError as err:
-            _LOGGER.warning("Failed to create directory %s: %s", save_file_folder, err)
+    # Usuń ten blok, ponieważ już sprawdziliśmy i utworzyliśmy katalog wyżej
+    # Nie powinniśmy go ponownie sprawdzać
 
     plate_manager = hass.data[DOMAIN]["plate_manager"]
 
@@ -74,7 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         name,
         api_key,
         region,
-        save_file_folder,
+        save_file_folder,  # Przekazujemy stałą ścieżkę
         save_timestamped_file,
         always_save_latest_file,
         consecutive_captures,
@@ -85,6 +92,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     )
 
     async_add_entities([entity])
+
 
 class EnhancedPlateRecognizer(ImageProcessingEntity):
     """Representation of an Enhanced PlateRecognizer entity."""
