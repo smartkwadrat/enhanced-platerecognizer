@@ -1,11 +1,11 @@
 """Enhanced PlateRecognizer image_processing platform."""
+
 import asyncio
 import datetime
-import io
 import logging
 import os
-
 import aiohttp
+
 from homeassistant.components.image_processing import ImageProcessingEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, CONF_SOURCE
@@ -17,7 +17,6 @@ from .const import (
     CONF_REGION,
     CONF_CONSECUTIVE_CAPTURES,
     CONF_CAPTURE_INTERVAL,
-    CONF_SAVE_FILE_FOLDER,
     CONF_SAVE_TIMESTAMPED_FILE,
     CONF_ALWAYS_SAVE_LATEST_FILE,
     CONF_MAX_IMAGES,
@@ -33,45 +32,54 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     """Set up Enhanced PlateRecognizer from a config entry."""
     config = entry.data
     options = entry.options
-    
+
     # Ustalamy stałą ścieżkę do katalogu Tablice
     save_file_folder = os.path.join(hass.config.path(), "www", "Tablice")
 
-    # Sprawdzamy czy katalog istnieje - poprawione wcięcia
-    if not os.path.isdir(save_file_folder):
-        try:
-            os.makedirs(save_file_folder, exist_ok=True)
-            _LOGGER.info("Created directory: %s", save_file_folder)
-        except OSError as err:
-            _LOGGER.warning("Failed to create directory %s: %s", save_file_folder, err)
+    # Sprawdzamy czy katalog istnieje - asynchronicznie
+    async def ensure_directory_exists(directory):
+        def create_dir():
+            try:
+                os.makedirs(directory, exist_ok=True)
+                _LOGGER.info("Created directory: %s", directory)
+                return True
+            except OSError as err:
+                _LOGGER.warning("Failed to create directory %s: %s", directory, err)
+                return False
+        
+        return await hass.async_add_executor_job(create_dir)
+
+    await ensure_directory_exists(save_file_folder)
 
     camera_entity = config[CONF_SOURCE]
     api_key = config[CONF_API_KEY]
     name = config.get(CONF_NAME, f"Enhanced PlateRecognizer {camera_entity}")
-
     region = options.get(CONF_REGION, config.get(CONF_REGION))
+
     # Nie nadpisujemy save_file_folder z konfiguracji - używamy ustalonej wcześniej ścieżki
     save_timestamped_file = options.get(
         CONF_SAVE_TIMESTAMPED_FILE, config.get(CONF_SAVE_TIMESTAMPED_FILE, True)
     )
+
     always_save_latest_file = options.get(
         CONF_ALWAYS_SAVE_LATEST_FILE, config.get(CONF_ALWAYS_SAVE_LATEST_FILE, True)
     )
+
     consecutive_captures = options.get(
         CONF_CONSECUTIVE_CAPTURES, config.get(CONF_CONSECUTIVE_CAPTURES, 1)
     )
+
     capture_interval = options.get(
         CONF_CAPTURE_INTERVAL, config.get(CONF_CAPTURE_INTERVAL, 1.2)
     )
+
     max_images = options.get(
         CONF_MAX_IMAGES, config.get(CONF_MAX_IMAGES, 10)
     )
+
     tolerate_one_mistake = options.get(
         CONF_TOLERATE_ONE_MISTAKE, config.get(CONF_TOLERATE_ONE_MISTAKE, False)
     )
-
-    # Usuń ten blok, ponieważ już sprawdziliśmy i utworzyliśmy katalog wyżej
-    # Nie powinniśmy go ponownie sprawdzać
 
     plate_manager = hass.data[DOMAIN]["plate_manager"]
 
@@ -81,7 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         name,
         api_key,
         region,
-        save_file_folder,  # Przekazujemy stałą ścieżkę
+        save_file_folder, # Przekazujemy stałą ścieżkę
         save_timestamped_file,
         always_save_latest_file,
         consecutive_captures,
@@ -92,7 +100,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     )
 
     async_add_entities([entity])
-
 
 class EnhancedPlateRecognizer(ImageProcessingEntity):
     """Representation of an Enhanced PlateRecognizer entity."""
@@ -127,7 +134,6 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         self._max_images = max_images
         self._plate_manager = plate_manager
         self._tolerate_one_mistake = tolerate_one_mistake
-
         self._attr_unit_of_measurement = "plate"
         self._vehicles = []
         self._statistics = None
@@ -136,7 +142,6 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         self._processing = False
         self._state = 0
         self._regions = [region] if region else None
-
         # Binary sensor for known plate detection
         self._detect_known_plate_sensor = (
             f"binary_sensor.{self._name.lower().replace(' ', '_').replace('.', '_')}_known_plate_detected"
@@ -174,12 +179,15 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         return attr
 
     async def async_process_image(self, image):
-        response = await self._process_plate_recognition(image)
-        if response:
-            self._update_attributes(response)
-            # Save image if configured
-            if self._save_file_folder and (self._save_timestamped_file or self._always_save_latest_file):
-                await self._save_image(image)
+        try:
+            response = await self._process_plate_recognition(image)
+            if response:
+                self._update_attributes(response)
+                
+                # Save image if configured
+                if self._save_file_folder and (self._save_timestamped_file or self._always_save_latest_file):
+                    await self._save_image(image)
+
                 # Clean old images
                 if self._max_images > 0:
                     self.hass.async_create_task(
@@ -192,165 +200,249 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
                             }
                         )
                     )
-            # Update entity state
-            self.async_schedule_update_ha_state()
-            # Update sensors for recognized plates
-            await self._update_recognition_sensors(response)
-            # Update binary sensor for known plate
-            plates = [res.get("plate", "").upper() for res in response.get("results", [])]
-            await self._update_known_plate_sensor(plates)
-        return response
+
+                # Update entity state
+                self.async_schedule_update_ha_state()
+
+                # Update sensors for recognized plates
+                await self._update_recognition_sensors(response)
+
+                # Update binary sensor for known plate
+                plates = [res.get("plate", "").upper() for res in response.get("results", [])]
+                await self._update_known_plate_sensor(plates)
+                
+                return response
+        except Exception as e:
+            _LOGGER.error(f"Błąd w async_process_image: {e}")
+            return None
 
     async def async_scan_and_process(self, service=None):
+        """Asynchronicznie przechwytuje i przetwarza obraz z kamery."""
         if self._processing:
             _LOGGER.warning("Already processing, skipping request.")
             return
+
         self._processing = True
         try:
             for i in range(self._consecutive_captures):
-                if i > 0:
-                    await asyncio.sleep(self._capture_interval)
-                camera = self.hass.components.camera
-                image = await camera.async_get_image(self._camera)
-                await self.async_process_image(image.content)
+                try:
+                    if i > 0:
+                        await asyncio.sleep(self._capture_interval)
+                    
+                    camera = self.hass.components.camera
+                    try:
+                        image = await camera.async_get_image(self._camera)
+                        await self.async_process_image(image.content)
+                    except Exception as e:
+                        _LOGGER.error(f"Błąd pobierania obrazu z kamery: {e}")
+                except Exception as e:
+                    _LOGGER.error(f"Błąd w pętli przechwytywania: {e}")
+        except Exception as e:
+            _LOGGER.error(f"Nieoczekiwany błąd w scan_and_process: {e}")
         finally:
             self._processing = False
 
     async def _process_plate_recognition(self, image):
+        """Proces rozpoznawania tablic z poprawioną obsługą błędów."""
         headers = {"Authorization": f"Token {self._api_key}"}
-        data = {"regions": self._region if self._region else ""}
+        
         try:
             timeout = aiohttp.ClientTimeout(total=60)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                form = aiohttp.FormData()
-                form.add_field("upload", image, filename="image.jpg", content_type="image/jpeg")
-                if self._region:
-                    form.add_field("regions", self._region)
-                async with session.post(
-                    PLATE_READER_URL, headers=headers, data=form
-                ) as resp:
-                    return await resp.json()
-        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            _LOGGER.error("API call error: %s", err)
-        return None
+                try:
+                    form = aiohttp.FormData()
+                    form.add_field("upload", image, filename="image.jpg", content_type="image/jpeg")
+                    if self._region:
+                        form.add_field("regions", self._region)
+                    
+                    async with session.post(PLATE_READER_URL, headers=headers, data=form) as resp:
+                        if resp.status != 200:
+                            _LOGGER.error(f"Błąd API: status {resp.status}")
+                            return None
+                        
+                        return await resp.json()
+                except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                    _LOGGER.error(f"Błąd wywołania API: {err}")
+                    return None
+        except Exception as e:
+            _LOGGER.error(f"Nieoczekiwany błąd API: {e}")
+            return None
 
     def _update_attributes(self, response):
-        results = response.get("results", [])
-        self._state = len(results)
-        vehicles = []
-        orientation = []
-        for res in results:
-            if "vehicle" in res and "type" in res["vehicle"]:
-                vehicles.append({
-                    "type": res["vehicle"]["type"],
-                    "plate": res.get("plate", "")
-                })
-            else:
-                vehicles.append({
-                    "type": "unknown",
-                    "plate": res.get("plate", "")
-                })
-            if "orientation" in res and "angle" in res["orientation"]:
-                orientation.append(res["orientation"]["angle"])
-            else:
-                orientation.append(None)
-        self._vehicles = vehicles
-        self._orientation = orientation
-        now = datetime.datetime.now()
-        self._last_detection = now.strftime("%Y-%m-%d_%H-%M-%S")
-        if "usage" in response:
-            usage = response["usage"]
-            statistics = {
-                "total_calls": usage.get("total_calls"),
-                "usage": {
-                    "year": usage.get("year"),
-                    "month": usage.get("month"),
-                    "resets_on": usage.get("resets_on"),
-                    "calls": usage.get("calls"),
-                },
-                "calls_remaining": usage.get("calls_remaining"),
-            }
-            self._statistics = statistics
+        """Aktualizuje atrybuty na podstawie odpowiedzi API."""
+        try:
+            results = response.get("results", [])
+            self._state = len(results)
+
+            vehicles = []
+            orientation = []
+            for res in results:
+                if "vehicle" in res and "type" in res["vehicle"]:
+                    vehicles.append({
+                        "type": res["vehicle"]["type"],
+                        "plate": res.get("plate", "")
+                    })
+                else:
+                    vehicles.append({
+                        "type": "unknown",
+                        "plate": res.get("plate", "")
+                    })
+
+                if "orientation" in res and "angle" in res["orientation"]:
+                    orientation.append(res["orientation"]["angle"])
+                else:
+                    orientation.append(None)
+
+            self._vehicles = vehicles
+            self._orientation = orientation
+
+            now = datetime.datetime.now()
+            self._last_detection = now.strftime("%Y-%m-%d_%H-%M-%S")
+
+            if "usage" in response:
+                usage = response["usage"]
+                statistics = {
+                    "total_calls": usage.get("total_calls"),
+                    "usage": {
+                        "year": usage.get("year"),
+                        "month": usage.get("month"),
+                        "resets_on": usage.get("resets_on"),
+                        "calls": usage.get("calls"),
+                    },
+                    "calls_remaining": usage.get("calls_remaining"),
+                }
+                self._statistics = statistics
+        except Exception as e:
+            _LOGGER.error(f"Błąd w _update_attributes: {e}")
 
     async def _save_image(self, image):
+        """Asynchronicznie zapisuje obraz do pliku."""
         if not self._save_file_folder:
             return
-        timestamp_suffix = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        safe_name = self._name.replace(" ", "_").replace(".", "_")
-        latest_filename = f"{safe_name}_latest.jpg"
-        latest_path = os.path.join(self._save_file_folder, latest_filename)
-        if self._save_timestamped_file:
-            timestamp_filename = f"{safe_name}_{timestamp_suffix}.jpg"
-            timestamp_path = os.path.join(self._save_file_folder, timestamp_filename)
-            await self.hass.async_add_executor_job(_write_image, timestamp_path, image)
-        if self._always_save_latest_file:
-            await self.hass.async_add_executor_job(_write_image, latest_path, image)
+
+        try:
+            timestamp_suffix = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            safe_name = self._name.replace(" ", "_").replace(".", "_")
+            
+            def save_files():
+                try:
+                    # Zapisywanie pliku z timestampem
+                    if self._save_timestamped_file:
+                        timestamp_filename = f"{safe_name}_{timestamp_suffix}.jpg"
+                        timestamp_path = os.path.join(self._save_file_folder, timestamp_filename)
+                        with open(timestamp_path, "wb") as file:
+                            file.write(image)
+                    
+                    # Zapisywanie najnowszego pliku
+                    if self._always_save_latest_file:
+                        latest_filename = f"{safe_name}_latest.jpg"
+                        latest_path = os.path.join(self._save_file_folder, latest_filename)
+                        with open(latest_path, "wb") as file:
+                            file.write(image)
+                    
+                    return True
+                except (IOError, OSError) as e:
+                    _LOGGER.error(f"Błąd podczas zapisu obrazu: {e}")
+                    return False
+            
+            await self.hass.async_add_executor_job(save_files)
+        except Exception as e:
+            _LOGGER.error(f"Nieoczekiwany błąd w _save_image: {e}")
 
     async def _update_recognition_sensors(self, response):
-        results = response.get("results", [])
-        if not results:
-            return
-        plates = [result.get("plate", "").upper() for result in results]
-        if plates:
-            plates_str = ", ".join(plates)
-            self.hass.states.async_set(
-                "sensor.last_recognized_car", plates_str,
-                {"friendly_name": "Ostatnio rozpoznane tablice"}
-            )
+        """Aktualizuje sensory informujące o rozpoznanych tablicach."""
+        try:
+            results = response.get("results", [])
+            if not results:
+                self.hass.states.async_set(
+                    "sensor.last_recognized_car", "Brak",
+                    {"friendly_name": "Ostatnio rozpoznane tablice"}
+                )
+                self.hass.states.async_set(
+                    "sensor.recognized_car", "Brak rozpoznanych tablic",
+                    {"friendly_name": "Rozpoznany samochód"}
+                )
+                return
+
+            plates = [result.get("plate", "").upper() for result in results]
+            if plates:
+                plates_str = ", ".join(plates)
+                self.hass.states.async_set(
+                    "sensor.last_recognized_car", plates_str,
+                    {"friendly_name": "Ostatnio rozpoznane tablice"}
+                )
+
             recognized_plates = []
             for plate in plates:
-                if self._plate_manager.is_plate_recognized(plate):
+                if await self._plate_manager.async_is_plate_recognized(plate):
                     recognized_plates.append(plate)
+
             if recognized_plates:
                 message = f"Rozpoznane tablice {recognized_plates[0]} znajdują się na liście"
                 if len(recognized_plates) > 1:
                     message += f" (oraz {len(recognized_plates) - 1} innych)"
             else:
                 message = f"Nie rozpoznano tablic: {', '.join(plates)}"
+
             self.hass.states.async_set(
                 "sensor.recognized_car", message,
                 {"friendly_name": "Rozpoznany samochód"}
             )
+
             async def clear_recognized_car(wait):
                 await asyncio.sleep(wait)
                 self.hass.states.async_set(
                     "sensor.recognized_car", "",
                     {"friendly_name": "Rozpoznany samochód"}
                 )
+
             self.hass.async_create_task(clear_recognized_car(10))
+        except Exception as e:
+            _LOGGER.error(f"Błąd w _update_recognition_sensors: {e}")
 
     async def _update_known_plate_sensor(self, detected_plates):
-        known_plates = set(self._plate_manager.get_plates().keys())
-        detected = False
-        for plate in detected_plates:
-            if plate in known_plates:
-                detected = True
-                break
-            if self._tolerate_one_mistake:
-                for known in known_plates:
-                    if self._levenshtein_distance(plate, known) == 1:
-                        detected = True
+        """Aktualizuje sensor wskazujący na wykrycie znanej tablicy."""
+        try:
+            known_plates = set((await self._plate_manager.async_get_plates()).keys())
+            detected = False
+            
+            for plate in detected_plates:
+                if plate in known_plates:
+                    detected = True
+                    break
+                
+                if self._tolerate_one_mistake:
+                    for known in known_plates:
+                        if self._levenshtein_distance(plate, known) == 1:
+                            detected = True
+                            break
+                    if detected:
                         break
+
+            state = "wykryto" if detected else "brak"
+            self.hass.states.async_set(self._detect_known_plate_sensor, state, {
+                "friendly_name": "Wykrycie znanej tablicy"
+            })
+
             if detected:
-                break
-        state = "wykryto" if detected else "brak"
-        self.hass.states.async_set(self._detect_known_plate_sensor, state, {
-            "friendly_name": "Wykrycie znanej tablicy"
-        })
-        if detected:
-            async def clear_sensor():
-                await asyncio.sleep(5)
-                self.hass.states.async_set(self._detect_known_plate_sensor, "brak", {
-                    "friendly_name": "Wykrycie znanej tablicy"
-                })
-            self.hass.async_create_task(clear_sensor())
+                async def clear_sensor():
+                    await asyncio.sleep(5)
+                    self.hass.states.async_set(self._detect_known_plate_sensor, "brak", {
+                        "friendly_name": "Wykrycie znanej tablicy"
+                    })
+
+                self.hass.async_create_task(clear_sensor())
+        except Exception as e:
+            _LOGGER.error(f"Błąd w _update_known_plate_sensor: {e}")
 
     @staticmethod
     def _levenshtein_distance(s1, s2):
+        """Oblicza odległość Levenshteina między dwoma stringami."""
         if len(s1) < len(s2):
             return EnhancedPlateRecognizer._levenshtein_distance(s2, s1)
         if len(s2) == 0:
             return len(s1)
+
         previous_row = range(len(s2) + 1)
         for i, c1 in enumerate(s1):
             current_row = [i + 1]
@@ -361,7 +453,3 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
                 current_row.append(min(insertions, deletions, substitutions))
             previous_row = current_row
         return previous_row[-1]
-
-def _write_image(path, image):
-    with open(path, "wb") as file:
-        file.write(image)
