@@ -1,0 +1,100 @@
+name: Release Manager
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Krok 1: Pobierz gałąź main
+      - name: Checkout main
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          fetch-depth: 0
+      
+      # Krok 2: Pobierz wersję z nazwy taga
+      - name: Set version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+      
+      # Krok 3: Sprawdź, czy wersja w manifest.json jest już zgodna z tagiem
+      - name: Check manifest version
+        id: check_version
+        run: |
+          MANIFEST_VERSION=$(grep -oP '(?<="version": ")[^"]*' custom_components/homeassistant_ai_support/manifest.json)
+          echo "MANIFEST_VERSION=$MANIFEST_VERSION" >> $GITHUB_ENV
+          if [ "$MANIFEST_VERSION" == "$VERSION" ]; then
+            echo "NEEDS_UPDATE=false" >> $GITHUB_ENV
+            echo "Manifest version is already $VERSION, no update needed"
+          else
+            echo "NEEDS_UPDATE=true" >> $GITHUB_ENV
+            echo "Manifest version is $MANIFEST_VERSION, will update to $VERSION"
+          fi
+      
+      # Krok 4: Aktualizuj manifest.json i README.md
+      - name: Update manifest
+        if: env.NEEDS_UPDATE == 'true'
+        id: update_manifest
+        run: |
+          set -e
+          echo "Updating manifest.json version from $MANIFEST_VERSION to $VERSION"
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/homeassistant_ai_support/manifest.json
+
+      - name: Update README version
+        if: env.NEEDS_UPDATE == 'true'
+        run: |
+          echo "Updating README.md version from $MANIFEST_VERSION to $VERSION"
+          sed -i "s/Version [0-9]\+\.[0-9]\+\.[0-9]\+/Version $VERSION/" README.md
+          git add README.md
+
+      - name: Commit and push
+        if: env.NEEDS_UPDATE == 'true'
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add custom_components/homeassistant_ai_support/manifest.json
+          git commit -m "Update version to $VERSION"
+          git push origin main && echo "MANIFEST_UPDATED=true" >> $GITHUB_ENV || echo "MANIFEST_UPDATED=false" >> $GITHUB_ENV
+      
+      # Krok 5: Utwórz nowy tag na aktualnym commicie w main tylko jeśli manifest został zaktualizowany
+      - name: Create new tag
+        if: env.MANIFEST_UPDATED == 'true' || env.NEEDS_UPDATE == 'false'
+        id: create_tag
+        run: |
+          set -e
+          if [ "$NEEDS_UPDATE" == "true" ]; then
+            echo "Recreating tag on updated commit"
+            git tag -f v$VERSION
+            git push origin v$VERSION --force && echo "TAG_CREATED=true" >> $GITHUB_ENV || echo "TAG_CREATED=false" >> $GITHUB_ENV
+          else
+            echo "No manifest updates needed, using existing tag"
+            echo "TAG_CREATED=true" >> $GITHUB_ENV
+          fi
+
+      # Krok 6: Utwórz release
+      - name: Create Release
+        if: env.TAG_CREATED == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: "v${{ env.VERSION }}"
+          body: "Automatic version update"
+      
+      # Krok 7: Powiadomienie w przypadku niepowodzenia
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Release workflow failed for v${process.env.VERSION}`,
+              body: `Release workflow for tag v${process.env.VERSION} failed. Please check the workflow logs for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
