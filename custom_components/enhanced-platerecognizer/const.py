@@ -14,3 +14,10 @@ CONF_TOLERATE_ONE_MISTAKE = "tolerate_one_mistake"
 SERVICE_ADD_PLATE = "add_plate"
 SERVICE_REMOVE_PLATE = "remove_plate"
 SERVICE_CLEAN_IMAGES = "clean_images"
+
+CONF_CAMERAS_CONFIG = "cameras_config"
+
+CONF_CAMERA_ENTITY_ID = "camera_entity_id"
+CONF_CAMERA_FRIENDLY_NAME = "camera_friendly_name"
+
+MAX_CAMERAS = 3

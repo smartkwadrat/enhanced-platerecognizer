@@ -4,88 +4,112 @@
     "step": {
       "user": {
         "title": "Konfiguracja Enhanced PlateRecognizer",
-        "description": "Skonfiguruj rozpoznawanie tablic rejestracyjnych z zaawansowanymi opcjami",
+        "description": "Skonfiguruj rozpoznawanie tablic rejestracyjnych z obsługą wielu kamer i zaawansowanymi opcjami. Możesz dodać do {max_cameras} kamer.",
         "data": {
-          "name": "Nazwa",
-          "api_key": "Klucz API",
-          "source": "Kamera",
-          "region": "Region tablic rejestracyjnych",
+          "name": "Nazwa instancji integracji",
+          "api_key": "Klucz API PlateRecognizer",
+          "region": "Region tablic rejestracyjnych (np. pl, eu)",
+          "save_file_folder": "Folder zapisu zdjęć",
           "save_timestamped_file": "Zapisuj pliki z datą i czasem",
-          "always_save_latest_file": "Zawsze zapisuj ostatnie zdjęcie",
-          "consecutive_captures": "Liczba kolejnych zdjęć (1-5)",
-          "capture_interval": "Odstęp między zdjęciami (sek)",
+          "always_save_latest_file": "Zawsze zapisuj ostatnie zdjęcie (np. camera_latest.jpg)",
+          "consecutive_captures": "Liczba kolejnych zdjęć do analizy (1-5)",
+          "capture_interval": "Odstęp między kolejnymi zdjęciami (sek, 1.0-2.0)",
           "max_images": "Maksymalna liczba przechowywanych zdjęć (1-30)",
-          "tolerate_one_mistake": "Toleruj pomyłkę jednego znaku"
+          "tolerate_one_mistake": "Toleruj pomyłkę jednego znaku w numerze tablicy",
+          "camera_1_entity_id": "Kamera 1 - Encja",
+          "camera_1_friendly_name": "Kamera 1 - Nazwa przyjazna (unikalna)",
+          "camera_2_entity_id": "Kamera 2 - Encja (opcjonalnie)",
+          "camera_2_friendly_name": "Kamera 2 - Nazwa przyjazna (unikalna, jeśli używana)",
+          "camera_3_entity_id": "Kamera 3 - Encja (opcjonalnie)",
+          "camera_3_friendly_name": "Kamera 3 - Nazwa przyjazna (unikalna, jeśli używana)"
         }
       }
     },
     "error": {
-      "already_configured": "Ta kamera jest już skonfigurowana",
-      "invalid_api_key": "Nieprawidłowy klucz API",
-      "invalid_folder": "Nieprawidłowa ścieżka folderu",
-      "cannot_connect": "Nie można połączyć się z API"
+      "already_configured": "Ta instancja Enhanced PlateRecognizer jest już skonfigurowana. Możesz zarządzać kamerami w opcjach.",
+      "invalid_api_key": "Nieprawidłowy klucz API PlateRecognizer.",
+      "invalid_folder": "Nieprawidłowa ścieżka folderu zapisu zdjęć.",
+      "cannot_connect": "Nie można połączyć się z API PlateRecognizer. Sprawdź klucz i połączenie internetowe.",
+      "at_least_one_camera": "Należy wybrać przynajmniej jedną kamerę i podać dla niej nazwę przyjazną.",
+      "duplicate_camera_friendly_name": "Nazwy przyjazne dla skonfigurowanych kamer muszą być unikalne.",
+      "camera_friendly_name_required": "Nazwa przyjazna jest wymagana dla każdej wybranej kamery."
     },
     "abort": {
-      "already_configured": "Ta kamera jest już skonfigurowana z Enhanced PlateRecognizer",
-      "no_cameras": "Nie znaleziono dostępnych kamer"
+      "single_instance_allowed": "Integracja Enhanced PlateRecognizer jest już skonfigurowana. Możesz zarządzać kamerami i opcjami w istniejącej konfiguracji.",
+      "no_cameras": "Nie znaleziono dostępnych encji kamer w Home Assistant. Dodaj najpierw kamery do systemu.",
+      "cannot_connect_initial": "Nie można połączyć się z API PlateRecognizer podczas inicjalizacji. Sprawdź klucz i połączenie."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Opcje Enhanced PlateRecognizer",
-        "description": "Dostosuj zaawansowane ustawienia rozpoznawania tablic",
+        "description": "Dostosuj globalne ustawienia oraz zarządzaj kamerami (Maks.: {max_cameras}, Aktualnie: {current_cameras}).",
         "data": {
-          "region": "Region dla tablic rejestracyjnych",
+          "region": "Region dla tablic rejestracyjnych (np. pl, eu)",
+          "save_file_folder": "Folder zapisu zdjęć",
           "save_timestamped_file": "Zapisuj pliki z datą i czasem",
-          "always_save_latest_file": "Zawsze zapisuj ostatnie zdjęcie",
-          "consecutive_captures": "Liczba kolejnych zdjęć (1-5)",
-          "capture_interval": "Odstęp między zdjęciami (sek)",
+          "always_save_latest_file": "Zawsze zapisuj ostatnie zdjęcie (np. camera_latest.jpg)",
+          "consecutive_captures": "Liczba kolejnych zdjęć do analizy (1-5)",
+          "capture_interval": "Odstęp między kolejnymi zdjęciami (sek, 1.0-2.0)",
           "max_images": "Maksymalna liczba przechowywanych zdjęć (1-30)",
-          "tolerate_one_mistake": "Toleruj pomyłkę jednego znaku"
+          "tolerate_one_mistake": "Toleruj pomyłkę jednego znaku w numerze tablicy",
+          "keep_camera_X_placeholder": "Zachowaj kamerę: {camera_name}",
+          "camera_X_friendly_name_options_placeholder": "Nowa nazwa przyjazna dla: {camera_name}",
+          "new_camera_entity_id": "Dodaj nową kamerę (encja)",
+          "new_camera_friendly_name": "Nazwa przyjazna dla nowej kamery (unikalna)"
+        },
+        "error": {
+          "at_least_one_camera_options": "Po modyfikacji musi pozostać przynajmniej jedna skonfigurowana kamera.",
+          "duplicate_camera_friendly_name_options": "Nazwy przyjazne dla kamer muszą być unikalne po modyfikacji.",
+          "camera_already_configured": "Wybrana nowa kamera jest już skonfigurowana w tej instancji.",
+          "new_camera_friendly_name_required_if_new_camera_selected": "Nazwa przyjazna jest wymagana, jeśli wybrano nową kamerę do dodania."
         }
       }
     }
   },
   "entity": {
     "binary_sensor": {
-      "known_plate_detected": {
-        "name": "Wykrycie znanej tablicy",
+      "known_plate_detected_template": {
+        "name": "Wykrycie znanej tablicy ({camera_name})",
         "state": {
-          "wykryto": "Wykryto",
-          "brak": "Brak"
+          "on": "Wykryto",
+          "off": "Brak"
         }
       }
     },
     "sensor": {
       "recognized_car": {
-        "name": "Rozpoznany samochód"
+        "name": "Rozpoznany samochód (Wszystkie kamery)"
+      },
+      "recognized_car_camera_specific_template": {
+        "name": "Rozpoznany samochód ({camera_name})"
       },
       "last_recognized_car": {
-        "name": "Ostatnio rozpoznane tablice"
+        "name": "Ostatnio rozpoznane tablice (Wszystkie kamery)"
       },
       "formatted_car_plates": {
         "name": "Znane tablice rejestracyjne"
       }
     },
     "image_processing": {
-      "enhanced_platerecognizer": {
-        "name": "Rozpoznawanie tablic"
+      "enhanced_platerecognizer_template": {
+        "name": "Rozpoznawanie tablic ({camera_name})"
       }
     }
   },
   "services": {
     "scan": {
-      "name": "Skanuj kamerę",
-      "description": "Wykonuje rozpoznanie tablic dla wskazanej kamery lub wszystkich kamer."
+      "name": "Skanuj kamery",
+      "description": "Wykonuje rozpoznanie tablic dla wskazanej kamery lub wszystkich skonfigurowanych kamer w tej instancji."
     },
     "add_plate": {
       "name": "Dodaj tablicę",
-      "description": "Dodaje nową tablicę do listy znanych tablic.",
+      "description": "Dodaje nową tablicę do globalnej listy znanych tablic.",
       "fields": {
         "plate": {
           "name": "Tablica rejestracyjna",
-          "description": "Numer tablicy do dodania"
+          "description": "Numer tablicy do dodania (np. ABC12345)"
         },
         "owner": {
           "name": "Właściciel",
@@ -95,7 +119,7 @@
     },
     "remove_plate": {
       "name": "Usuń tablicę",
-      "description": "Usuwa tablicę z listy znanych tablic.",
+      "description": "Usuwa tablicę z globalnej listy znanych tablic.",
       "fields": {
         "plate": {
           "name": "Tablica rejestracyjna",
@@ -105,16 +129,26 @@
     },
     "clean_images": {
       "name": "Czyść zdjęcia",
-      "description": "Usuwa najstarsze zdjęcia, pozostawiając tylko określoną liczbę najnowszych.",
+      "description": "Usuwa najstarsze zdjęcia z folderu zapisu, pozostawiając tylko określoną liczbę najnowszych.",
       "fields": {
         "folder": {
           "name": "Folder",
-          "description": "Ścieżka folderu ze zdjęciami (opcjonalnie)"
+          "description": "Ścieżka folderu ze zdjęciami. Domyślnie folder skonfigurowany w opcjach integracji."
         },
         "max_images": {
           "name": "Maksymalna liczba zdjęć",
-          "description": "Ile najnowszych zdjęć ma zostać"
+          "description": "Ile najnowszych zdjęć ma zostać. Domyślnie wartość skonfigurowana w opcjach."
         }
+      }
+    }
+  },
+  "entity_component": {
+    "_": {
+      "name": "Enhanced PlateRecognizer",
+      "state": {
+        "idle": "Bezczynny",
+        "processing": "Przetwarzanie",
+        "error": "Błąd"
       }
     }
   }
