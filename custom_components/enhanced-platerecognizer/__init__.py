@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import ATTR_ENTITY_ID
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.event import async_track_state_change
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     DOMAIN,
@@ -20,7 +21,8 @@ from .const import (
     CONF_MAX_IMAGES,
     CONF_CAMERAS_CONFIG,
     CONF_CAMERA_ENTITY_ID,
-    CONF_CAMERA_FRIENDLY_NAME 
+    CONF_CAMERA_FRIENDLY_NAME,
+
 )
 from .platemanager import PlateManager
 
@@ -95,7 +97,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "global_recognition_manager" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["global_recognition_manager"] = GlobalRecognitionManager(hass)
     # global_recognition_manager = hass.data[DOMAIN]["global_recognition_manager"] # Można przypisać do zmiennej lokalnej
-
 
     # --- Rejestracja usług ---
     # Usługi są rejestrowane tylko raz, niezależnie od liczby wpisów konfiguracyjnych.
@@ -270,16 +271,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Przekazanie konfiguracji do platform
     # Te platformy odczytają listę kamer z hass.data[DOMAIN][entry.entry_id][CONF_CAMERAS_CONFIG]
     # lub pojedynczą kamerę ze starszej konfiguracji.
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, "image_processing")
-    )
-    _LOGGER.debug(f"Forwarding setup for 'image_processing' for entry {entry.entry_id}")
-
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, "device")
-    )
-    _LOGGER.debug(f"Forwarding setup for 'device' for entry {entry.entry_id}")
-
+    # Ustaw platformy
+    platforms = ["image_processing", "button"]
+    for platform in platforms:
+        hass.async_create_task(
+            hass.config_entries.async_forward_entry_setup(entry, platform)
+        )
+        _LOGGER.debug(f"Forwarding setup for '{platform}' for entry {entry.entry_id}")
 
     # Dodanie listenera do aktualizacji opcji
     entry.async_on_unload(entry.add_update_listener(update_listener))
@@ -490,7 +488,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Wyładowanie wpisu konfiguracyjnego."""
     _LOGGER.info(f"Unloading Enhanced PlateRecognizer: {entry.title}")
     
-    platforms_to_unload = ["image_processing", "device"]
+    platforms_to_unload = ["image_processing", "button"]
     unload_ok = all(
         await asyncio.gather(
             *[hass.config_entries.async_forward_entry_unload(entry, platform) for platform in platforms_to_unload]
@@ -504,7 +502,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Jeśli to ostatni wpis tej integracji, usuń globalne menedżery
         # Sprawdź, czy są inne aktywne wpisy dla DOMAIN
         active_entries = [
-            e for e_id, e_data in hass.data[DOMAIN].items() 
+            e_id for e_id, e_data in hass.data[DOMAIN].items() 
             if isinstance(e_data, dict) and CONF_CAMERAS_CONFIG in e_data # Prosty test czy to dane wpisu
         ]
         if not active_entries:
@@ -512,7 +510,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data[DOMAIN].pop("global_recognition_manager", None)
             _LOGGER.info("Removed global managers for Enhanced PlateRecognizer.")
             # Można też rozważyć usunięcie globalnych encji zarządzania, jeśli nie są już potrzebne
-            # await _remove_plate_management_entities(hass)
-
+            await _remove_plate_management_entities(hass)
 
     return unload_ok

@@ -28,7 +28,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     image_processing_entities.append(entity)
 
     # Utwórz urządzenie dla każdej encji image_processing
-    devices = [EnhancedPlateRecognizerDevice(entity) for entity in image_processing_entities]
+    devices = [
+        EnhancedPlateRecognizerDevice(entity, config_entry.entry_id) 
+        for entity in image_processing_entities
+    ]
+    
     async_add_entities(devices)
 
 class EnhancedPlateRecognizerDevice(DeviceEntity):
@@ -39,11 +43,11 @@ class EnhancedPlateRecognizerDevice(DeviceEntity):
         self._image_processing_entity = image_processing_entity
         self._name = image_processing_entity.name
         self._camera = image_processing_entity._camera
-        self._attr_unique_id = f"{self._name}_device"
+        self._attr_unique_id = f"{self._name}_device_{config_entry_id}" 
         self._attr_device_info = {
             "identifiers": {
                 # Unikalny identyfikator urządzenia
-                (DOMAIN, self._name)
+                (DOMAIN, f"{self._name}_{config_entry_id}")
             },
             "name": self._name,  # Nazwa urządzenia
             "manufacturer": "SmartKwadrat",  # Producent

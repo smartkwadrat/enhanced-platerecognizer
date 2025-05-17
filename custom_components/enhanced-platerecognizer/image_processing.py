@@ -10,6 +10,9 @@ from homeassistant.components.image_processing import ImageProcessingEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, CONF_SOURCE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.components.camera import DOMAIN as CAMERA_DOMAIN
+
 
 from .const import (
     DOMAIN,
@@ -38,6 +41,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entry_config = hass.data[DOMAIN][entry.entry_id]
     
     plate_manager = hass.data[DOMAIN]["plate_manager"]
+
+    # Pobierz rejestr urządzeń
+    device_registry = dr.async_get(hass)
+    
+    # Utwórz urządzenie dla integracji
+    main_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,  # Używamy entry z parametrów funkcji
+        identifiers={(DOMAIN, f"platerecognizer_{config_entry.entry_id}")},
+        manufacturer="Enhanced PlateRecognizer",
+        name=f"Plate Recognizer {config.get(CONF_NAME, 'Default')}",
+        model="API Integration",
+        sw_version="1.0",
+    )
+    
+    # Dodaj encje powiązane z tym urządzeniem
+    for camera_entity in config.get(CONF_SOURCE, []):
+        async_add_entities([
+            EnhancedPlateRecognizer(
+                hass, 
+                config_entry, 
+                camera_entity, 
+                config,
+                plate_manager,
+                main_device.id,  # Przekaż ID urządzenia do encji
+            )
+        ])
+    
     global_manager = hass.data[DOMAIN].get("global_recognition_manager")
 
     if not global_manager:
@@ -299,6 +329,9 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         # Unikalne ID dla tej encji - na podstawie ID encji kamery, aby było stabilne
         self._attr_unique_id = f"{DOMAIN}_{self._camera_entity_id.replace('.', '_')}_epr"
 
+        self._config_entry_id = config_entry_id
+        self._attr_unique_id = f"{DOMAIN}_{camera_entity_id}_{config_entry_id}"
+
         self._api_key = api_key
         self._region = region
         self._save_file_folder = save_file_folder
@@ -341,7 +374,7 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
             # Można dodać entry_type="service" jeśli urządzenie reprezentuje usługę a nie fizyczne urządzenie
         )
         _LOGGER.info(f"Initialized EnhancedPlateRecognizer: {self.name} (UID: {self.unique_id}) for camera: {self._camera_entity_id}")
-
+ 
     @property
     def camera_entity(self):
         """Return the camera entity id."""
