@@ -4,10 +4,7 @@ import logging
 import os
 import re
 import yaml
-from typing import Dict, List, Optional, Tuple
-
-# Import HomeAssistant type hint if needed, but hass is passed as an object
-# from homeassistant.core import HomeAssistant 
+from typing import Dict, List
 
 _LOGGER = logging.getLogger(__name__)
 

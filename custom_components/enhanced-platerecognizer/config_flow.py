@@ -4,10 +4,9 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.components.camera import DOMAIN as CAMERA_DOMAIN
-from homeassistant.const import CONF_NAME, CONF_SOURCE
+from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry
-import uuid
 
 from .const import (
     DOMAIN, CONF_API_KEY, CONF_REGION, CONF_SAVE_FILE_FOLDER,

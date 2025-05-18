@@ -10,16 +10,18 @@ from homeassistant.helpers.entity import DeviceInfo
 from . import DOMAIN
 from .const import (
     CONF_NAME,
-    CONF_SOURCE,
+    CONF_CAMERAS_CONFIG,
+    CONF_CAMERA_ENTITY_ID,
     _LOGGER,
 )
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Skonfiguruj przyciski z wpisu konfiguracyjnego."""
-    config = {**config_entry.data, **config_entry.options}
+    config = hass.data[DOMAIN][config_entry.entry_id]
     
     entities = []
-    for camera_entity in config.get(CONF_SOURCE, []):
+    for camera_conf in config.get(CONF_CAMERAS_CONFIG, []):
+        camera_entity = camera_conf[CONF_CAMERA_ENTITY_ID]
         entities.append(
             PlateRecognitionButton(
                 hass,
@@ -42,9 +44,10 @@ class PlateRecognitionButton(ButtonEntity):
         self._camera_entity = camera_entity
         self._config = config
         
-        camera_name = hass.states.get(camera_entity).name if hass.states.get(camera_entity) else camera_entity.split(".")[-1]
+        camera_state = hass.states.get(camera_entity)
+        camera_name = camera_state.name if camera_state else camera_entity.split(".")[-1]
         self._attr_name = f"Rozpoznaj tablice - {camera_name}"
-        self._attr_unique_id = f"{DOMAIN}_button_{camera_entity}_{config_entry.entry_id}"
+        self._attr_unique_id = f"{DOMAIN}_button_{camera_entity.replace('.', '_')}_{config_entry.entry_id}"
     
     @property
     def device_info(self) -> DeviceInfo:

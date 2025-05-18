@@ -1,5 +1,4 @@
 from homeassistant.helpers.entity import DeviceEntity
-from homeassistant.core import callback
 from homeassistant.helpers import entity_platform
 from .const import DOMAIN
 import logging
@@ -38,25 +37,24 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 class EnhancedPlateRecognizerDevice(DeviceEntity):
     """Reprezentacja urządzenia Enhanced PlateRecognizer."""
 
-    def __init__(self, image_processing_entity):
+    def __init__(self, image_processing_entity, config_entry_id):
         """Inicjalizacja urządzenia."""
+        self._config_entry_id = config_entry_id
         self._image_processing_entity = image_processing_entity
         self._name = image_processing_entity.name
-        self._camera = image_processing_entity._camera
-        self._attr_unique_id = f"{self._name}_device_{config_entry_id}" 
+        self._camera_entity_id = image_processing_entity.camera_entity
+        self._attr_unique_id = f"{self._name}_device_{self._config_entry_id}"
         self._attr_device_info = {
             "identifiers": {
-                # Unikalny identyfikator urządzenia
-                (DOMAIN, f"{self._name}_{config_entry_id}")
+                (DOMAIN, f"{self._name}_{self._config_entry_id}")
             },
             "name": self._name,  # Nazwa urządzenia
             "manufacturer": "SmartKwadrat",  # Producent
             "model": "Enhanced PlateRecognizer",  # Model
-            "sw_version": "0.1.6",  # Wersja oprogramowania
             "configuration_url": f"/config/integrations/integration/{DOMAIN}",
         }
         self._attr_has_entity_name = True
-        self._attr_name = None  # Urządzenie nie ma nazwy, bazuje na nazwach encji
+        self._attr_name = None 
 
     @property
     def device_info(self):
