@@ -123,18 +123,19 @@ class EnhancedPlateRecognizerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
         data_schema = vol.Schema(schema_fields)
 
         return self.async_show_form(
-            step_id="user", data_schema=data_schema, errors=errors
+            step_id="user",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={"max_cameras": MAX_CAMERAS}
         )
-
 
 class EnhancedPlateRecognizerOptionsFlow(config_entries.OptionsFlow):
     """Options flow for Enhanced PlateRecognizer."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry):
-        self.config_entry = config_entry
         # Przechowujemy aktualną konfigurację kamer do edycji
-        self.current_cameras_config = list(self.config_entry.options.get(CONF_CAMERAS_CONFIG, 
-                                          self.config_entry.data.get(CONF_CAMERAS_CONFIG, [])))
+        self.current_cameras_config = list(config_entry.options.get(CONF_CAMERAS_CONFIG,
+                                          config_entry.data.get(CONF_CAMERAS_CONFIG, [])))
 
 
     async def async_step_init(self, user_input=None):

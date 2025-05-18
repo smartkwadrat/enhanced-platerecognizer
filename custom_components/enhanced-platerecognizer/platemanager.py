@@ -16,10 +16,11 @@ class PlateManager:
         self.hass = hass  # Instance of HomeAssistant
         self.plates_file: str = os.path.join(config_dir, "enhanced_platerecognizer_plates.yaml")
         self.plates: Dict[str, str] = {}  # Stores plate_number: owner_name
-        # Initial load is done synchronously for simplicity at startup if this constructor is called from a sync context.
-        # However, for HA, it's better to call an async load method after __init__.
-        # For now, we keep _load_plates() here, assuming it's called once during HA setup.
-        self._load_plates_sync() # Synchronous load on init
+
+    async def async_initial_load(self) -> None: # Nowa metoda do początkowego ładowania
+        """Load plates from YAML file asynchronously."""
+        _LOGGER.debug(f"Attempting initial load of plates from {self.plates_file}")
+        await self.hass.async_add_executor_job(self._load_plates_sync)
 
     def _load_plates_sync(self) -> None:
         """

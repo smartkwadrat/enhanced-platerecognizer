@@ -1,5 +1,6 @@
 """Stałe dla Enhanced PlateRecognizer."""
 DOMAIN = "enhanced_platerecognizer"
+CONF_NAME = "name"
 
 CONF_API_KEY = "api_key"
 CONF_REGION = "region"

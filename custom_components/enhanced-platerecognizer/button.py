@@ -12,8 +12,10 @@ from .const import (
     CONF_NAME,
     CONF_CAMERAS_CONFIG,
     CONF_CAMERA_ENTITY_ID,
-    _LOGGER,
+    CONF_NAME,
 )
+
+_LOGGER = logging.getLogger(__name__) 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Skonfiguruj przyciski z wpisu konfiguracyjnego."""
@@ -51,10 +53,9 @@ class PlateRecognitionButton(ButtonEntity):
     
     @property
     def device_info(self) -> DeviceInfo:
-        """Zwraca informacje o urządzeniu nadrzędnym."""
         return {
             "identifiers": {(DOMAIN, f"platerecognizer_{self._config_entry.entry_id}")},
-            "name": f"Plate Recognizer {self._config.get(CONF_NAME, 'Default')}",
+            "name": self._config_entry.title,
             "manufacturer": "Enhanced PlateRecognizer",
             "model": "API Integration",
         }

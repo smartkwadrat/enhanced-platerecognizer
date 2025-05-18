@@ -89,6 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
         entity = EnhancedPlateRecognizer(
             hass=hass,
+            config_entry=entry,
             config_entry_id=entry.entry_id,
             camera_entity_id=camera_entity_id,
             camera_friendly_name=camera_friendly_name,
@@ -127,6 +128,7 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
     def __init__(
         self,
         hass: HomeAssistant,
+        config_entry: ConfigEntry,
         config_entry_id: str,
         camera_entity_id: str,
         camera_friendly_name: str,
@@ -144,14 +146,15 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
     ):
         super().__init__()
         self.hass = hass
+        self._config_entry = config_entry
         self._config_entry_id = config_entry_id
         self._camera_entity_id = camera_entity_id
         self._camera_friendly_name = camera_friendly_name
         self._attr_name = f"PlateRecognizer {self._camera_friendly_name}"
         self._attr_unique_id = f"{DOMAIN}_{self._camera_entity_id.replace('.', '_')}_{config_entry_id}"
 
-        self._api_key = api_key
-        self._region = region
+        self._api_key = self._config_entry.data.get(CONF_API_KEY)
+        self._region = self._config_entry.options.get(CONF_REGION, self._config_entry.data.get(CONF_REGION, "pl"))
         self._save_file_folder = save_file_folder
         self._save_timestamped_file = save_timestamped_file
         self._always_save_latest_file = always_save_latest_file
@@ -175,12 +178,15 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         sane_binary_sensor_base_id = self._attr_unique_id.replace(f"{DOMAIN}_", "")
         self._detect_known_plate_sensor_id = f"binary_sensor.{DOMAIN}_{sane_binary_sensor_base_id}_known_plate_detected"
 
+        manifest = hass.integration_manifests.get(DOMAIN)
+        sw_version = manifest.version if manifest else "N/A"
+
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"platerecognizer_{self._config_entry_id}")},
-            name=f"Plate Recognizer {self._camera_friendly_name}",
+            name=self._config_entry.title,
             manufacturer="SmartKwadrat (Custom Integration)",
-            model="Enhanced PlateRecognizer Camera Processor",
-            sw_version="0.1.8",
+            model="Enhanced PlateRecognizer",
+            sw_version=sw_version,
         )
         _LOGGER.info(f"Initialized EnhancedPlateRecognizer: {self.name} (UID: {self.unique_id}) for camera: {self._camera_entity_id}")
 
