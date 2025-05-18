@@ -166,7 +166,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Użyj istniejącego GlobalRecognitionManager
     if "global_recognition_manager" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["global_recognition_manager"] = GlobalRecognitionManager(hass)
-    global_manager = hass.data[DOMAIN]["global_recognition_manager"]
 
     # Przechowuj scaloną konfigurację (data + options) dla tego wpisu
     active_config = {**entry.data, **entry.options}
@@ -249,7 +248,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info("Listener for 'input_select.remove_plate' registered.")
 
     # Przekazanie konfiguracji do platform
-    platforms = ["image_processing", "button"]
+    platforms = ["button"]
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
     _LOGGER.debug(f"Forwarding setup for platforms: {', '.join(platforms)} for entry {entry.entry_id}")
 
