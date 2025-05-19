@@ -19,7 +19,7 @@ image_processing:
     always_save_latest_file: true
     tolerate_one_mistake: false
     source:
-      - entity_id: camera.samochod_test_tablic
-        friendly_name: "Samochód test"
-      # Możesz dodać kolejne kamery
+      - entity_id: camera.<Twoja_Kamera1>
+    #  - entity_id: camera.<Twoja_Kamera2>
+    # Podaj dokładnie te same encje co w konfiguracji integracji
 ```
