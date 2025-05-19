@@ -241,7 +241,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info("Listener for 'input_select.remove_plate' registered.")
 
     # Przekazanie konfiguracji do platform
-    platforms = ["button"]
+    platforms = ["image_processing", "device"]
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
     _LOGGER.debug(f"Forwarding setup for platforms: {', '.join(platforms)} for entry {entry.entry_id}")
 
@@ -254,7 +254,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Wyładowanie wpisu konfiguracyjnego."""
-    platforms_to_unload = ["button"]
+    platforms_to_unload = ["image_processing", "device"]
     unload_ok = all(
         await asyncio.gather(
             *[hass.config_entries.async_forward_entry_unload(entry, platform) for platform in platforms_to_unload]

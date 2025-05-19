@@ -192,21 +192,8 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         return attr
 
     async def async_process_image(self, image_bytes: bytes):
-        """Process an image using Plate Recognizer API."""
-        # Przygotuj regiony na podstawie konfiguracji
-        self._regions_for_api = self._regions if self._regions else []
-        
-        # Wywołaj API
-        response = await self._call_plate_recognizer_api(image_bytes)
-        
-        # Zapisz zdjęcie jeśli skonfigurowano
-        await self._save_image_to_disk(image_bytes)
-        
-        # Zaktualizuj atrybuty
-        self._update_internal_attributes(response)
-        
-        # Zaktualizuj sensory
-        await self._update_all_recognition_sensors(response)
+        _LOGGER.debug(f"{self.name}: Pominięto automatyczne przetwarzanie obrazu (wywołanie przez HA).")
+        return
 
     async def async_scan_and_process(self):
         """Scan for plates by capturing an image from the camera and then processing it."""
@@ -262,7 +249,7 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
 
                 _LOGGER.debug(f"{self.name}: Wysyłanie żądania POST do API...")
                 async with session.post(PLATE_READER_URL, headers=headers, data=form_data) as resp:
-                    if resp.status == 200:
+                    if resp.status in (200, 201):
                         response_data = await resp.json()
                         _LOGGER.debug(
                             f"{self.name}: Odpowiedź API OK (status {resp.status}). "
@@ -398,6 +385,7 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
             message_specific_for_this_camera = "Brak danych" # Domyślny stan sensora specyficznego dla kamery
             is_any_plate_known_on_this_camera = False # Czy na tej kamerze wykryto znaną tablicę
 
+            detected_plates_on_this_camera = []
             recognized_known_plates_saved = []
             recognized_known_plates_here = []
 
