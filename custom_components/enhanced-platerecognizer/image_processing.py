@@ -398,6 +398,9 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
             message_specific_for_this_camera = "Brak danych" # Domyślny stan sensora specyficznego dla kamery
             is_any_plate_known_on_this_camera = False # Czy na tej kamerze wykryto znaną tablicę
 
+            recognized_known_plates_saved = []
+            recognized_known_plates_here = []
+
             if response_json_or_none and "results" in response_json_or_none:
                 results = response_json_or_none.get("results", [])
                 _LOGGER.debug(f"{self.name}: Wyniki API do aktualizacji sensorów: {results}")

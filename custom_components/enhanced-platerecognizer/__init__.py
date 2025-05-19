@@ -11,6 +11,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import ATTR_ENTITY_ID
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.entity_platform import async_get_platforms
+
+
 
 from .const import (
     DOMAIN,
@@ -45,15 +49,6 @@ SERVICE_CLEAN_IMAGES_SCHEMA = vol.Schema({
 async def async_setup(hass: HomeAssistant, config) -> bool:
     """Konfiguracja integracji."""
     hass.data.setdefault(DOMAIN, {})
-    device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
-        identifiers={(DOMAIN, DOMAIN)},
-        name="Enhanced Plate Recognizer (Integracja)",
-        manufacturer="SmartKwadrat",
-        model="Integracja Centralna EPR"
-    )
-    _LOGGER.info("Zarejestrowano centralne urządzenie dla Enhanced Plate Recognizer.")
-
     hass.data[DOMAIN]["global_save_folder"] = os.path.join(hass.config.path(), "www", "Tablice")
     hass.data[DOMAIN]["global_max_images"] = 10
 
@@ -160,6 +155,14 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Konfiguracja z config entry."""
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, DOMAIN)},
+        name="Enhanced Plate Recognizer (Integracja)",
+        manufacturer="SmartKwadrat",
+        model="Integracja Centralna EPR"
+    )
     hass.data.setdefault(DOMAIN, {})
     plate_manager = hass.data[DOMAIN]["plate_manager"]
     if not plate_manager:

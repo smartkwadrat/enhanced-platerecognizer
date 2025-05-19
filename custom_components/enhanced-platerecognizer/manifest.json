@@ -12,7 +12,6 @@
   "dependencies": [],
   "platforms": [
     "image_processing",
-    "button",
     "device"
   ]
 }
