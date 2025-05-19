@@ -109,31 +109,40 @@ class PlateRecognitionButton(ButtonEntity):
     async def async_press(self) -> None:
         """Obsługuje naciśnięcie przycisku."""
         _LOGGER.debug(f"Naciśnięto przycisk dla kamery {self._camera_entity_id} (wpis: {self._config_entry.entry_id})")
-
-        # Szukaj encji image_processing o unique_id odpowiadającym tej kamerze i config_entry
-        target_image_processing_unique_id = f"{DOMAIN}_{self._camera_entity_id.replace('.', '_')}_yaml"
-        entity_reg = er.async_get(self.hass)
-        target_entity = entity_reg.async_get_entity_id("image_processing", DOMAIN, target_image_processing_unique_id)
+        
+        # Szukaj encji image_processing o entity_id pasującym do wzorca dla tej kamery
+        target_entity_pattern = f"image_processing.platerecognizer_{self._camera_entity_id.split('.')[-1]}"
+        _LOGGER.debug(f"Szukam encji pasującej do wzorca: {target_entity_pattern}")
+        
+        # Znajdź wszystkie encje image_processing
+        all_entities = self.hass.states.async_all("image_processing")
+        target_entity = None
+        
+        for entity in all_entities:
+            if entity.entity_id.startswith(target_entity_pattern):
+                target_entity = entity.entity_id
+                _LOGGER.debug(f"Znaleziono pasującą encję: {target_entity}")
+                break
+        
         if target_entity:
             _LOGGER.info(
-                f"Wywoływanie usługi image_processing.scan dla encji: {target_entity} "
-                f"(unique_id: {target_image_processing_unique_id})"
+                f"Wywoływanie usługi enhanced_platerecognizer.scan dla encji: {target_entity}"
             )
             try:
                 await self.hass.services.async_call(
-                    "image_processing",
+                    "enhanced_platerecognizer",  # Zmieniono z "image_processing" na "enhanced_platerecognizer"
                     "scan",
                     {"entity_id": target_entity},
                     blocking=False
                 )
             except Exception as e:
                 _LOGGER.error(
-                    f"Błąd podczas wywoływania usługi image_processing.scan dla {target_entity}: {e}"
+                    f"Błąd podczas wywoływania usługi enhanced_platerecognizer.scan dla {target_entity}: {e}"
                 )
         else:
             _LOGGER.error(
-                f"Nie można znaleźć encji image_processing w rejestrze dla unique_id: "
-                f"{target_image_processing_unique_id}. "
+                f"Nie można znaleźć encji image_processing pasującej do wzorca: "
+                f"{target_entity_pattern}. "
                 f"Sprawdź, czy encja image_processing dla kamery {self._camera_entity_id} "
-                f"została poprawnie utworzona i ma pasujący unique_id."
+                f"została poprawnie utworzona."
             )

@@ -172,13 +172,56 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
 
     async def async_process_image(self, image_bytes: bytes):
         """Process an image using Plate Recognizer API."""
-        # ... (implementacja jak dotychczas, przenieś z obecnego kodu)
-        pass
+        # Przygotuj regiony na podstawie konfiguracji
+        self._regions_for_api = [self._region] if self._region and self._region != "none" else []
+        
+        # Wywołaj API
+        response = await self._call_plate_recognizer_api(image_bytes)
+        
+        # Zapisz zdjęcie jeśli skonfigurowano
+        await self._save_image_to_disk(image_bytes)
+        
+        # Zaktualizuj atrybuty
+        self._update_internal_attributes(response)
+        
+        # Zaktualizuj sensory
+        await self._update_all_recognition_sensors(response)
 
     async def async_scan_and_process(self):
         """Scan for plates by capturing an image from the camera and then processing it."""
-        # ... (implementacja jak dotychczas, przenieś z obecnego kodu)
-        pass
+        _LOGGER.debug(f"{self.name}: Rozpoczynanie skanowania...")
+        
+        if self._processing:
+            _LOGGER.warning(f"{self.name}: Przetwarzanie jest już w toku, pomijam żądanie.")
+            return
+        
+        self._processing = True
+        
+        try:
+            # Wykonaj serię zdjęć w odstępach
+            for capture_index in range(self._consecutive_captures):
+                if capture_index > 0:
+                    # Czekaj między kolejnymi zdjęciami
+                    await asyncio.sleep(self._capture_interval)
+                    
+                _LOGGER.debug(f"{self.name}: Pobieranie obrazu dla kamery {self.camera_entity} (zdjęcie {capture_index + 1}/{self._consecutive_captures})")
+                
+                # Pobierz obraz z kamery
+                try:
+                    image = await camera.async_get_image(self.camera_entity)
+                    if not image:
+                        _LOGGER.error(f"{self.name}: Nie można pobrać obrazu z kamery {self.camera_entity}")
+                        continue
+                    
+                    # Przetwórz obraz
+                    await self.async_process_image(image.content)
+                    
+                except Exception as capture_err:
+                    _LOGGER.error(f"{self.name}: Błąd podczas przetwarzania obrazu: {capture_err}", exc_info=True)
+        finally:
+            self._processing = False
+            _LOGGER.debug(f"{self.name}: Zakończono przetwarzanie.")
+
 
     async def _call_plate_recognizer_api(self, image_bytes: bytes):
         """Call the Plate Recognizer API with the provided image bytes."""
