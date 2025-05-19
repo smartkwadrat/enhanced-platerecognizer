@@ -1,6 +1,6 @@
 """Obsługa przycisków dla Enhanced PlateRecognizer."""
+
 import logging
-from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
@@ -9,8 +9,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers import entity_registry as er
 
-from . import DOMAIN 
 from .const import (
+    DOMAIN,
     CONF_CAMERAS_CONFIG,
     CONF_CAMERA_ENTITY_ID,
     CONF_CAMERA_FRIENDLY_NAME,
@@ -45,30 +45,27 @@ async def async_setup_entry(
         if not isinstance(camera_conf, dict):
             _LOGGER.warning(f"Element konfiguracji kamery nie jest słownikiem: {camera_conf}. Pomijanie.")
             continue
-
         camera_entity_id = camera_conf.get(CONF_CAMERA_ENTITY_ID)
         if not camera_entity_id:
             _LOGGER.warning(f"Brak '{CONF_CAMERA_ENTITY_ID}' w konfiguracji kamery: {camera_conf}. Pomijanie.")
             continue
-
-        # Pobierz przyjazną nazwę kamery z konfiguracji
         camera_friendly_name = camera_conf.get(CONF_CAMERA_FRIENDLY_NAME)
-
         entities.append(
             PlateRecognitionButton(
                 hass,
                 config_entry,
                 camera_entity_id,
-                camera_friendly_name # Przekaż przyjazną nazwę
+                camera_friendly_name
             )
         )
 
     if entities:
         async_add_entities(entities)
     else:
-        _LOGGER.debug(f"Nie utworzono żadnych encji przycisków dla wpisu {config_entry.entry_id}, "
-                      f"prawdopodobnie brak skonfigurowanych kamer.")
-
+        _LOGGER.debug(
+            f"Nie utworzono żadnych encji przycisków dla wpisu {config_entry.entry_id}, "
+            f"prawdopodobnie brak skonfigurowanych kamer."
+        )
 
 class PlateRecognitionButton(ButtonEntity):
     """Przycisk do uruchamiania rozpoznawania tablic dla określonej kamery."""
@@ -83,7 +80,7 @@ class PlateRecognitionButton(ButtonEntity):
         """Inicjalizacja przycisku."""
         self.hass = hass
         self._config_entry = config_entry
-        self._camera_entity_id = camera_entity_id # Nazwa atrybutu zmieniona dla spójności
+        self._camera_entity_id = camera_entity_id
 
         # Ustalanie nazwy wyświetlanej dla przycisku
         if camera_friendly_name_from_config:
@@ -93,11 +90,9 @@ class PlateRecognitionButton(ButtonEntity):
             if camera_state and camera_state.name:
                 camera_display_name = camera_state.name
             else:
-                # Ostateczny fallback na część entity_id kamery
                 camera_display_name = self._camera_entity_id.split(".")[-1]
 
         self._attr_name = f"Rozpoznaj tablice - {camera_display_name}"
-        # Unique ID musi być unikalne dla każdego przycisku
         self._attr_unique_id = f"{DOMAIN}_button_{self._camera_entity_id.replace('.', '_')}_{self._config_entry.entry_id}"
 
     @property
@@ -105,21 +100,20 @@ class PlateRecognitionButton(ButtonEntity):
         """Zwraca informacje o urządzeniu powiązanym z tym przyciskiem."""
         return DeviceInfo(
             identifiers={(DOMAIN, f"platerecognizer_{self._config_entry.entry_id}")},
-            name=self._config_entry.title, # Tytuł wpisu konfiguracyjnego
-            manufacturer="Enhanced PlateRecognizer", # Można przenieść do stałych
-            model="API Integration", # Można przenieść do stałych
-            sw_version=self.hass.data[DOMAIN].get("version", "N/A")
+            name=self._config_entry.title,
+            manufacturer="SmartKwadrat",
+            model="Enhanced Plate Recognizer",
+            sw_version=self.hass.data[DOMAIN].get("version", "N/A"),
         )
 
     async def async_press(self) -> None:
         """Obsługuje naciśnięcie przycisku."""
         _LOGGER.debug(f"Naciśnięto przycisk dla kamery {self._camera_entity_id} (wpis: {self._config_entry.entry_id})")
 
-        target_image_processing_unique_id = f"{DOMAIN}_{self._camera_entity_id.replace('.', '_')}_{self._config_entry.entry_id}"
-
+        # Szukaj encji image_processing o unique_id odpowiadającym tej kamerze i config_entry
+        target_image_processing_unique_id = f"{DOMAIN}_{self._camera_entity_id.replace('.', '_')}_yaml"
         entity_reg = er.async_get(self.hass)
         target_entity = entity_reg.async_get_entity_id("image_processing", DOMAIN, target_image_processing_unique_id)
-
         if target_entity:
             _LOGGER.info(
                 f"Wywoływanie usługi image_processing.scan dla encji: {target_entity} "
@@ -143,4 +137,3 @@ class PlateRecognitionButton(ButtonEntity):
                 f"Sprawdź, czy encja image_processing dla kamery {self._camera_entity_id} "
                 f"została poprawnie utworzona i ma pasujący unique_id."
             )
-

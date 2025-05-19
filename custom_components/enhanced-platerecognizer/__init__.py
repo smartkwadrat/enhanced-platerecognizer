@@ -1,13 +1,14 @@
 """Enhanced PlateRecognizer - główny plik integracji."""
+
 import asyncio
 import logging
 import os
+
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import ATTR_ENTITY_ID
-
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -16,11 +17,7 @@ from .const import (
     SERVICE_ADD_PLATE,
     SERVICE_REMOVE_PLATE,
     SERVICE_CLEAN_IMAGES,
-    CONF_SAVE_FILE_FOLDER,
-    CONF_MAX_IMAGES,
     CONF_CAMERAS_CONFIG,
-    CONF_CAMERA_ENTITY_ID,
-    CONF_CAMERA_FRIENDLY_NAME,
 )
 from .platemanager import PlateManager
 
@@ -44,7 +41,6 @@ SERVICE_CLEAN_IMAGES_SCHEMA = vol.Schema({
     vol.Optional("folder"): cv.string,
     vol.Optional("max_images"): vol.All(vol.Coerce(int), vol.Range(min=1, max=30)),
 })
-
 
 async def async_setup(hass: HomeAssistant, config) -> bool:
     """Konfiguracja integracji."""
@@ -85,9 +81,7 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                     _LOGGER.info("Scan service called, but no matching entities found to scan.")
             except Exception as e:
                 _LOGGER.error(f"Błąd w scan_service_handler: {e}", exc_info=True)
-
-        hass.services.async_register(
-            DOMAIN, "scan", scan_service_handler, schema=SERVICE_SCAN_SCHEMA)
+        hass.services.async_register(DOMAIN, "scan", scan_service_handler, schema=SERVICE_SCAN_SCHEMA)
         _LOGGER.info("Service 'scan' registered.")
 
     if not hass.services.has_service(DOMAIN, SERVICE_ADD_PLATE):
@@ -102,9 +96,7 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                     _LOGGER.warning(f"Nieprawidłowy format tablicy przez usługę: {plate}")
             except Exception as e:
                 _LOGGER.error(f"Błąd w add_plate_service_handler: {e}", exc_info=True)
-
-        hass.services.async_register(
-            DOMAIN, SERVICE_ADD_PLATE, add_plate_service_handler, schema=SERVICE_ADD_PLATE_SCHEMA)
+        hass.services.async_register(DOMAIN, SERVICE_ADD_PLATE, add_plate_service_handler, schema=SERVICE_ADD_PLATE_SCHEMA)
         _LOGGER.info(f"Service '{SERVICE_ADD_PLATE}' registered.")
 
     if not hass.services.has_service(DOMAIN, SERVICE_REMOVE_PLATE):
@@ -118,9 +110,7 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                     _LOGGER.warning(f"Nie znaleziono tablicy przez usługę: {plate}")
             except Exception as e:
                 _LOGGER.error(f"Błąd w remove_plate_service_handler: {e}", exc_info=True)
-
-        hass.services.async_register(
-            DOMAIN, SERVICE_REMOVE_PLATE, remove_plate_service_handler, schema=SERVICE_REMOVE_PLATE_SCHEMA)
+        hass.services.async_register(DOMAIN, SERVICE_REMOVE_PLATE, remove_plate_service_handler, schema=SERVICE_REMOVE_PLATE_SCHEMA)
         _LOGGER.info(f"Service '{SERVICE_REMOVE_PLATE}' registered.")
 
     if not hass.services.has_service(DOMAIN, SERVICE_CLEAN_IMAGES):
@@ -128,16 +118,13 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
             try:
                 folder = service.data.get("folder")
                 max_images_from_service = service.data.get("max_images")
-
                 if not folder:
                     folder = hass.data[DOMAIN].get("global_save_folder")
                     _LOGGER.info(f"Folder nie został podany, używam globalnego: {folder}")
-
                 final_max_images = max_images_from_service
                 if final_max_images is None:
                     final_max_images = hass.data[DOMAIN].get("global_max_images")
                     _LOGGER.info(f"Max_images nie zostało podane, używam globalnego: {final_max_images}")
-
                 if folder and final_max_images is not None:
                     _LOGGER.info(f"Usługa clean_images wywołana dla folderu: {folder}, max_images: {final_max_images}")
                     await async_clean_old_images(hass, folder, final_max_images)
@@ -145,39 +132,28 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
                     _LOGGER.warning(f"Nieprawidłowy folder lub max_images do czyszczenia zdjęć: folder='{folder}', max_images='{final_max_images}'")
             except Exception as e:
                 _LOGGER.error(f"Błąd w clean_images_service_handler: {e}", exc_info=True)
-
-        hass.services.async_register(
-            DOMAIN, SERVICE_CLEAN_IMAGES, clean_images_service_handler, schema=SERVICE_CLEAN_IMAGES_SCHEMA)
+        hass.services.async_register(DOMAIN, SERVICE_CLEAN_IMAGES, clean_images_service_handler, schema=SERVICE_CLEAN_IMAGES_SCHEMA)
         _LOGGER.info(f"Service '{SERVICE_CLEAN_IMAGES}' registered.")
 
     return True
 
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Konfiguracja z config entry."""
     hass.data.setdefault(DOMAIN, {})
-
-    # Użyj istniejącej instancji PlateManager
     plate_manager = hass.data[DOMAIN]["plate_manager"]
     if not plate_manager:
         _LOGGER.error("PlateManager not initialized in async_setup. Aborting entry setup.")
         return False
 
-    # Użyj istniejącego GlobalRecognitionManager
     if "global_recognition_manager" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["global_recognition_manager"] = GlobalRecognitionManager(hass)
 
-    # Przechowuj scaloną konfigurację (data + options) dla tego wpisu
+    # Przechowuj tylko kamery z config_entry (bez ustawień globalnych)
     active_config = {**entry.data, **entry.options}
     hass.data[DOMAIN][entry.entry_id] = active_config
 
     if "first_entry_id" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["first_entry_id"] = entry.entry_id
-        if CONF_SAVE_FILE_FOLDER in active_config:
-            hass.data[DOMAIN]["global_save_folder"] = active_config[CONF_SAVE_FILE_FOLDER]
-        if CONF_MAX_IMAGES in active_config:
-            hass.data[DOMAIN]["global_max_images"] = active_config[CONF_MAX_IMAGES]
-        _LOGGER.info(f"Zaktualizowano globalne wartości z pierwszego wpisu konfiguracyjnego {entry.entry_id}")
 
     _LOGGER.info(f"Setting up Enhanced PlateRecognizer entry: {entry.title} ({entry.entry_id})")
     _LOGGER.debug(f"Active config for entry {entry.entry_id}: {active_config}")
@@ -187,7 +163,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await _create_plate_management_entities(hass)
         await _update_remove_plate_options_async(hass, plate_manager)
 
-    # Listenery: dodawanie tablicy przez input_text.add_new_plate
+    # Listenery do obsługi input_text/input_select
     if not hass.data[DOMAIN].get("add_plate_listener_registered", False):
         @callback
         def handle_add_plate_input(event):
@@ -199,7 +175,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     owner_entity = hass.states.get("input_text.add_plate_owner")
                     if owner_entity:
                         owner = owner_entity.state.strip()
-
                     async def add_and_update():
                         if await plate_manager.async_add_plate(plate, owner):
                             _LOGGER.info(f"Dodano tablicę przez input: {plate} ({owner})")
@@ -209,26 +184,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         else:
                             _LOGGER.warning(f"Nie udało się dodać tablicy przez input: {plate}")
                             hass.states.async_set("input_text.add_new_plate", "")
-
                     hass.async_create_task(add_and_update())
                 else:
                     _LOGGER.warning(f"Próba dodania nieprawidłowej tablicy przez input: {plate}")
                     hass.states.async_set("input_text.add_new_plate", "")
-
         async_track_state_change_event(hass, "input_text.add_new_plate", handle_add_plate_input)
         hass.data[DOMAIN]["add_plate_listener_registered"] = True
         _LOGGER.info("Listener for 'input_text.add_new_plate' registered.")
 
-    # Listener: usuwanie tablicy przez input_select.remove_plate
     if not hass.data[DOMAIN].get("remove_plate_listener_registered", False):
         @callback
         def handle_remove_plate_select(event):
             new_state = event.data.get("new_state")
             if (new_state and new_state.state and
-                    new_state.state != "Wybierz tablicę do usunięcia" and
-                    new_state.state != "Brak tablic"):
+                new_state.state != "Wybierz tablicę do usunięcia" and
+                new_state.state != "Brak tablic"):
                 plate_to_remove = new_state.state.split(' - ')[0].strip().upper()
-
                 async def remove_and_update():
                     if await plate_manager.async_remove_plate(plate_to_remove):
                         _LOGGER.info(f"Usunięto tablicę przez input_select: {plate_to_remove}")
@@ -240,9 +211,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         await _update_remove_plate_options_async(hass, plate_manager)
                     else:
                         _LOGGER.warning(f"Nie udało się usunąć tablicy przez input_select: {plate_to_remove}")
-
                 hass.async_create_task(remove_and_update())
-
         async_track_state_change_event(hass, "input_select.remove_plate", handle_remove_plate_select)
         hass.data[DOMAIN]["remove_plate_listener_registered"] = True
         _LOGGER.info("Listener for 'input_select.remove_plate' registered.")
@@ -259,16 +228,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info(f"Enhanced PlateRecognizer entry {entry.title} ({entry.entry_id}) setup complete.")
     return True
 
-
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Wyładowanie wpisu konfiguracyjnego."""
-    platforms_to_unload = ["image_processing", "button"]
+    platforms_to_unload = ["button"]
     unload_ok = all(
         await asyncio.gather(
             *[hass.config_entries.async_forward_entry_unload(entry, platform) for platform in platforms_to_unload]
         )
     )
-
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
         # Jeśli to ostatni wpis, usuń globalne menedżery
@@ -276,14 +243,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             e_id for e_id, e_data in hass.data[DOMAIN].items()
             if isinstance(e_data, dict) and CONF_CAMERAS_CONFIG in e_data
         ]
-
         if not active_entries:
             hass.data[DOMAIN].pop("plate_manager", None)
             hass.data[DOMAIN].pop("global_recognition_manager", None)
             _LOGGER.info("Removed global managers for Enhanced PlateRecognizer.")
             await _remove_plate_management_entities(hass)
     return unload_ok
-
 
 async def _create_plate_management_entities(hass):
     """Tworzy input_text, input_select i sensory do zarządzania."""
@@ -295,14 +260,12 @@ async def _create_plate_management_entities(hass):
                     "pattern": "^[a-zA-Z0-9]{2,10}$",
                 }
             )
-
         if not hass.states.get("input_text.add_plate_owner"):
             hass.states.async_set(
                 "input_text.add_plate_owner", "", {
                     "friendly_name": "Podaj właściciela tablic",
                 }
             )
-
         if not hass.states.get("input_select.remove_plate"):
             hass.states.async_set(
                 "input_select.remove_plate", "Wybierz tablicę do usunięcia", {
@@ -310,7 +273,6 @@ async def _create_plate_management_entities(hass):
                     "options": ["Wybierz tablicę do usunięcia", "Brak tablic"],
                 }
             )
-
         if not hass.states.get("sensor.formatted_car_plates"):
             hass.states.async_set(
                 "sensor.formatted_car_plates", "Znane tablice rejestracyjne", {
@@ -318,14 +280,12 @@ async def _create_plate_management_entities(hass):
                     "formatted_list": "Brak zapisanych tablic",
                 }
             )
-
         if not hass.states.get("sensor.recognized_car"):
             hass.states.async_set(
                 "sensor.recognized_car", "Brak rozpoznanych tablic", {
                     "friendly_name": "Rozpoznany samochód (Wszystkie kamery)",
                 }
             )
-
         if not hass.states.get("sensor.last_recognized_car"):
             hass.states.async_set(
                 "sensor.last_recognized_car", "Brak", {
@@ -334,7 +294,6 @@ async def _create_plate_management_entities(hass):
             )
     except Exception as e:
         _LOGGER.error(f"Błąd podczas tworzenia encji: {e}")
-
 
 async def _update_remove_plate_options_async(hass, plate_manager):
     """Aktualizuje opcje w input_select.remove_plate oraz sensor.formatted_car_plates."""
@@ -351,14 +310,11 @@ async def _update_remove_plate_options_async(hass, plate_manager):
             )
         except Exception as e:
             _LOGGER.error(f"Błąd aktualizacji input_select.remove_plate: {e}")
-
         formatted_list = ""
         for i, plate in enumerate(plates, 1):
             formatted_list += f"{i}. {plate}\n"
-
         if not formatted_list:
             formatted_list = "Brak zapisanych tablic"
-
         hass.states.async_set(
             "sensor.formatted_car_plates",
             "Znane tablice rejestracyjne",
@@ -367,22 +323,18 @@ async def _update_remove_plate_options_async(hass, plate_manager):
     except Exception as e:
         _LOGGER.error(f"Błąd w _update_remove_plate_options_async: {e}")
 
-
 async def async_clean_old_images(hass, folder, max_images):
     """Usuwa stare zdjęcia, zostawiając tylko max_images najnowszych."""
-
     def clean_files():
         try:
             if not os.path.isdir(folder):
                 _LOGGER.warning(f"Folder {folder} nie istnieje")
                 return False
-
             files = sorted(
                 (os.path.join(folder, f) for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))),
                 key=os.path.getmtime,
                 reverse=True
             )
-
             for f in files[max_images:]:
                 try:
                     os.remove(f)
@@ -392,9 +344,7 @@ async def async_clean_old_images(hass, folder, max_images):
         except Exception as e:
             _LOGGER.error(f"Błąd podczas czyszczenia zdjęć: {e}")
             return False
-
     return await hass.async_add_executor_job(clean_files)
-
 
 class GlobalRecognitionManager:
     def __init__(self, hass: HomeAssistant):
@@ -410,27 +360,22 @@ class GlobalRecognitionManager:
     def _update_global_sensors(self):
         all_last_plates_parts = []
         all_recognized_msgs_parts = []
-
         for cam_name_slug, (plates_str, rec_msg, is_known) in self._last_recognized_by_camera.items():
             cam_display_name = cam_name_slug.replace("_", " ").title()
             if plates_str and plates_str != "Brak":
                 all_last_plates_parts.append(f"{cam_display_name}: {plates_str}")
             if is_known and rec_msg:
                 all_recognized_msgs_parts.append(f"{cam_display_name}: {rec_msg.replace('Rozpoznane tablice ', '').replace(' znajdują się na liście', '')}")
-
         final_last_plates = "; ".join(all_last_plates_parts) if all_last_plates_parts else "Brak"
         final_recognized_msg = "; ".join(all_recognized_msgs_parts) if all_recognized_msgs_parts else "Brak rozpoznanych tablic"
-
         self.hass.states.async_set(
             "sensor.last_recognized_car", final_last_plates,
             {"friendly_name": "Ostatnio rozpoznane tablice (Wszystkie kamery)"}
         )
-
         self.hass.states.async_set(
             "sensor.recognized_car", final_recognized_msg,
             {"friendly_name": "Rozpoznany samochód (Wszystkie kamery)"}
         )
-
         self.hass.async_create_task(self._clear_global_recognized_car_sensor(20))
 
     async def _clear_global_recognized_car_sensor(self, wait_time: int):
@@ -446,18 +391,16 @@ class GlobalRecognitionManager:
         sane_camera_friendly_name = camera_friendly_name.lower().replace(" ", "_")
         if sane_camera_friendly_name in self._last_recognized_by_camera:
             del self._last_recognized_by_camera[sane_camera_friendly_name]
-        self._update_global_sensors()
+            self._update_global_sensors()
 
     def get_camera_specific_sensor_id(self, camera_friendly_name: str) -> str:
         sane_camera_name = camera_friendly_name.lower().replace(" ", "_").replace(".", "_")
         return f"{self.camera_specific_sensor_prefix}{sane_camera_name}"
 
-
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
     """Obsługa aktualizacji opcji."""
     _LOGGER.info(f"Enhanced PlateRecognizer ({entry.title}) options updated, reloading integration.")
     await hass.config_entries.async_reload(entry.entry_id)
-
 
 async def _remove_plate_management_entities(hass):
     """Usuwa encje zarządzania."""
@@ -469,7 +412,6 @@ async def _remove_plate_management_entities(hass):
         "sensor.recognized_car",
         "sensor.last_recognized_car",
     ]
-
     for entity_id in to_remove:
         try:
             hass.states.async_remove(entity_id)

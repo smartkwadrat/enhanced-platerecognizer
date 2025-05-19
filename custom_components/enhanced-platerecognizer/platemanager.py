@@ -8,6 +8,19 @@ from typing import Dict, List
 
 _LOGGER = logging.getLogger(__name__)
 
+
+async def async_get_recognized_plate(self, plate: str, tolerate_one_mistake: bool = False) -> str | None:
+    """Zwraca zapisaną tablicę, która została rozpoznana (dokładnie lub z tolerancją jednego błędu)."""
+    normalized_plate = plate.upper()
+    if normalized_plate in self.plates:
+        return normalized_plate
+    if tolerate_one_mistake:
+        for known_plate in self.plates.keys():
+            if self._levenshtein_distance(normalized_plate, known_plate) <= 1:
+                return known_plate
+    return None
+
+
 class PlateManager:
     """Class to manage license plates, owners, and persistence."""
 
