@@ -7,6 +7,7 @@ import os
 import aiohttp
 import voluptuous as vol
 from homeassistant.components.button import ButtonEntity
+from homeassistant.helpers.entity import DeviceInfo
 
 from homeassistant.components.image_processing import (
     ImageProcessingEntity,
@@ -593,7 +594,8 @@ class PlateRecognitionButton(ButtonEntity):
         self._image_processing_entity = image_processing_entity  # Dodaj referencję do encji image_processing
         self._attr_name = f"Rozpoznaj tablice - {self._camera_friendly_name}"
         self._attr_unique_id = f"{DOMAIN}_button_{self._camera_entity_id.replace('.', '_')}"
-
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, DOMAIN)},
+        )
     async def async_press(self):
         """Obsługuje naciśnięcie przycisku."""
         _LOGGER.debug(f"Naciśnięto przycisk dla kamery {self._camera_entity_id}")

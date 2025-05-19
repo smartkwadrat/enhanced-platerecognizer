@@ -1,12 +1,13 @@
 """Urządzenia (device) dla Enhanced PlateRecognizer."""
-
 import logging
 
-from homeassistant.helpers.entity import DeviceEntity
-from homeassistant.helpers.entity_platform import AddEntitiesCallback, async_get_current_platform
+# Importy potrzebne dla standardowej sygnatury async_setup_entry
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity import DeviceInfo # Może być potrzebne, jeśli będziesz tworzyć DeviceEntity
 
+# Importuj DOMAIN, aby można było go użyć w logach lub przyszłej logice
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -15,103 +16,80 @@ async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback
-) -> None:
-    """Skonfiguruj urządzenia dla Enhanced PlateRecognizer."""
-    platform = async_get_current_platform()
+) -> bool:
+    """
+    Konfiguracja platformy 'device' dla Enhanced PlateRecognizer poprzez ConfigEntry.
 
-    # Rejestracja serwisu czyszczenia zdjęć na poziomie urządzenia
-    platform.async_register_entity_service(
-        "clean_images",
-        {
-            "folder": str,
-            "max_images": int,
-        },
-        "async_clean_images_service",
+    W obecnej architekturze integracji, gdzie:
+    - Konfiguracja odbywa się głównie przez plik `configuration.yaml`.
+    - `config_flow` w `manifest.json` jest ustawione na `false`.
+    - Centralne urządzenie dla całej integracji jest tworzone programatycznie
+      w pliku `__init__.py` podczas inicjalizacji integracji.
+    - Encje (takie jak przyciski) są bezpośrednio powiązywane z tym centralnym urządzeniem
+      poprzez atrybut `device_info` w ich definicjach.
+
+    Ta funkcja (`device.async_setup_entry`) jest standardowym punktem wejścia dla platformy
+    'device', gdy Home Assistant przetwarza ConfigEntry. Jednak w przypadku tej integracji,
+    ponieważ `config_flow` jest `false` i nie są tworzone ConfigEntries przez interfejs
+    użytkownika dla głównej konfiguracji, ta funkcja zazwyczaj nie będzie wywoływana
+    w standardowym przepływie konfiguracji YAML.
+
+    Jeśli w przyszłości integracja zaczęłaby wykorzystywać ConfigEntry do zarządzania
+    specyficznymi aspektami, które mogłyby wymagać dedykowanych encji typu `DeviceEntity`
+    tworzonych przez tę platformę, odpowiednia logika zostałaby tutaj zaimplementowana.
+
+    Obecnie ta platforma nie tworzy żadnych dodatkowych urządzeń ani encji urządzeń,
+    ponieważ zarządzanie urządzeniami odbywa się w sposób opisany powyżej.
+    """
+    _LOGGER.debug(
+        "Enhanced PlateRecognizer (%s): device.async_setup_entry zostało wywołane dla wpisu konfiguracyjnego ID: %s. "
+        "Integracja jest skonfigurowana przez YAML, a główne urządzenie jest tworzone w __init__.py. "
+        "Ta funkcja obecnie nie tworzy dodatkowych urządzeń ani encji urządzeń z poziomu platformy 'device' "
+        "dla wpisów konfiguracyjnych.",
+        DOMAIN,
+        config_entry.entry_id
     )
 
-    # Pobierz wszystkie encje image_processing dla tej integracji
-    image_processing_entities = []
-    for entity_component in hass.data.get("image_processing", {}).values():
-        if hasattr(entity_component, "entities"):
-            for entity in entity_component.entities:
-                # Sprawdź czy encja należy do tej integracji po platform_name
-                if getattr(entity.platform, "platform_name", None) == DOMAIN:
-                    image_processing_entities.append(entity)
+    # W tym miejscu nie ma potrzeby dodawania encji (async_add_entities),
+    # ponieważ encje przycisków są zarządzane przez platformę 'button',
+    # a encje image_processing przez platformę 'image_processing'.
+    # Wszystkie te encje są powiązane z centralnym urządzeniem zdefiniowanym w __init__.py.
 
-    # Utwórz urządzenie dla każdej encji image_processing
-    devices = [
-        EnhancedPlateRecognizerDevice(entity, config_entry.entry_id)
-        for entity in image_processing_entities
-    ]
+    # Należy zwrócić True, aby wskazać Home Assistant, że platforma
+    # została pomyślnie "załadowana", nawet jeśli nie wykonuje
+    # żadnych konkretnych operacji dodawania encji w tym kontekście.
+    return True
 
-    if devices:
-        async_add_entities(devices)
-    else:
-        _LOGGER.debug(
-            f"Nie utworzono żadnych urządzeń dla wpisu {config_entry.entry_id} (brak encji image_processing)."
-        )
+# Poniżej mógłby znajdować się kod definiujący klasy dziedziczące po DeviceEntity,
+# gdyby ta platforma miała tworzyć własne, specyficzne encje urządzeń.
+# W obecnej konfiguracji nie jest to potrzebne.
+#
+# Przykład (kod nieaktywny, tylko dla ilustracji):
+#
+# class ExampleDeviceEntity(DeviceEntity):
+#     """Przykładowa encja urządzenia dla tej platformy."""
+#
+#     def __init__(self, hass: HomeAssistant, config_entry_id: str, device_name: str):
+#         """Inicjalizacja przykładowej encji urządzenia."""
+#         self._hass = hass
+#         self._name = f"EPR Device - {device_name}"
+#         self._attr_unique_id = f"{DOMAIN}_{config_entry_id}_{device_name.lower().replace(' ', '_')}"
+#
+#         # Informacje o urządzeniu, które powiążą tę encję z urządzeniem
+#         # stworzonym przez ConfigEntry lub centralnym urządzeniem.
+#         # Jeśli chcemy powiązać z centralnym urządzeniem:
+#         self._attr_device_info = DeviceInfo(
+#             identifiers={(DOMAIN, DOMAIN)}, # Identyfikatory centralnego urządzenia
+#         )
+#         # Lub jeśli chcemy powiązać z urządzeniem stworzonym przez ConfigEntry (jeśli by istniało):
+#         # self._attr_device_info = DeviceInfo(
+#         #     identifiers={(DOMAIN, config_entry_id)},
+#         # )
+#
+#     @property
+#     def name(self) -> str:
+#         """Zwraca nazwę encji."""
+#         return self._name
+#
+#     # ... inne wymagane właściwości i metody dla DeviceEntity ...
 
-class EnhancedPlateRecognizerDevice(DeviceEntity):
-    """Reprezentacja urządzenia Enhanced PlateRecognizer."""
-
-    def __init__(self, image_processing_entity, config_entry_id):
-        """Inicjalizacja urządzenia."""
-        self._config_entry_id = config_entry_id
-        self._image_processing_entity = image_processing_entity
-        self._name = image_processing_entity.name
-        self._camera_entity_id = image_processing_entity.camera_entity
-        self._attr_unique_id = f"{self._name}_device_{self._config_entry_id}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{self._name}_{self._config_entry_id}")},
-            "name": self._name,
-            "manufacturer": "SmartKwadrat",
-            "model": "Enhanced Plate Recognizer",
-            "configuration_url": f"/config/integrations/integration/{DOMAIN}",
-        }
-        self._attr_has_entity_name = True
-        self._attr_name = None
-
-    @property
-    def device_info(self):
-        """Informacje o urządzeniu."""
-        return self._attr_device_info
-
-    @property
-    def unique_id(self):
-        """Unikalny ID urządzenia."""
-        return self._attr_unique_id
-
-    @property
-    def name(self):
-        """Nazwa urządzenia."""
-        return self._name
-
-    @property
-    def available(self):
-        """Czy urządzenie jest dostępne."""
-        return True
-
-    @property
-    def should_poll(self):
-        """Nie odpytuj urządzenia."""
-        return False
-
-    async def async_clean_images_service(self, folder=None, max_images=None):
-        """Serwis do czyszczenia zdjęć."""
-        _LOGGER.debug(f"Wywołano serwis clean_images z folderem: {folder}, max_images: {max_images}")
-
-        # Pobierz folder i max_images z konfiguracji, jeśli nie zostały podane
-        if not folder:
-            folder = getattr(self._image_processing_entity, "_save_file_folder", None)
-        if not max_images:
-            max_images = getattr(self._image_processing_entity, "_max_images", None)
-
-        if not folder:
-            _LOGGER.warning("Brak folderu do czyszczenia zdjęć.")
-            return
-        if not max_images:
-            _LOGGER.warning("Brak maksymalnej liczby zdjęć do pozostawienia.")
-            return
-
-        from . import async_clean_old_images
-        await async_clean_old_images(self.hass, folder, max_images)

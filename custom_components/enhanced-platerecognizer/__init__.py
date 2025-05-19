@@ -45,6 +45,15 @@ SERVICE_CLEAN_IMAGES_SCHEMA = vol.Schema({
 async def async_setup(hass: HomeAssistant, config) -> bool:
     """Konfiguracja integracji."""
     hass.data.setdefault(DOMAIN, {})
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        identifiers={(DOMAIN, DOMAIN)},
+        name="Enhanced Plate Recognizer (Integracja)",
+        manufacturer="SmartKwadrat",
+        model="Integracja Centralna EPR"
+    )
+    _LOGGER.info("Zarejestrowano centralne urządzenie dla Enhanced Plate Recognizer.")
+
     hass.data[DOMAIN]["global_save_folder"] = os.path.join(hass.config.path(), "www", "Tablice")
     hass.data[DOMAIN]["global_max_images"] = 10
 
