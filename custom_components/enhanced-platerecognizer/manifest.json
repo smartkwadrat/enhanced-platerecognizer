@@ -2,7 +2,7 @@
   "domain": "enhanced_platerecognizer",
   "name": "Enhanced Plate Recognizer",
   "version": "0.2.4",
-  "config_flow": true,
+  "config_flow": false,
   "documentation": "https://github.com/smartkwadrat/enhanced-platerecognizer",
   "requirements": [
     "pyyaml"

@@ -65,22 +65,34 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
     # --- Rejestracja usług (tylko raz na integrację) ---
     if not hass.services.has_service(DOMAIN, "scan"):
         async def scan_service_handler(service):
+            if hass.data[DOMAIN].get("global_scan_in_progress", False):
+                _LOGGER.warning("Inna operacja skanowania jest już w toku, pomijam żądanie.")
+                return
+            
+            hass.data[DOMAIN]["global_scan_in_progress"] = True
             try:
                 entity_ids_filter = service.data.get(ATTR_ENTITY_ID)
                 entities_to_scan = []
+                
                 for entity_component in hass.data.get("image_processing", {}).values():
                     if hasattr(entity_component, "entities"):
                         for entity in entity_component.entities:
                             if getattr(entity.platform, "platform_name", None) == DOMAIN:
                                 if not entity_ids_filter or entity.entity_id in entity_ids_filter:
                                     entities_to_scan.append(entity)
+                
                 if entities_to_scan:
                     _LOGGER.info(f"Scan service called for entities: {[e.entity_id for e in entities_to_scan]}")
                     await asyncio.gather(*[entity.async_scan_and_process() for entity in entities_to_scan])
                 else:
                     _LOGGER.info("Scan service called, but no matching entities found to scan.")
+            
             except Exception as e:
                 _LOGGER.error(f"Błąd w scan_service_handler: {e}", exc_info=True)
+            
+            finally:
+                hass.data[DOMAIN]["global_scan_in_progress"] = False
+        
         hass.services.async_register(DOMAIN, "scan", scan_service_handler, schema=SERVICE_SCAN_SCHEMA)
         _LOGGER.info("Service 'scan' registered.")
 

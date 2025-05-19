@@ -6,6 +6,7 @@ import logging
 import os
 import aiohttp
 import voluptuous as vol
+from homeassistant.components.button import ButtonEntity
 
 from homeassistant.components.image_processing import (
     ImageProcessingEntity,
@@ -50,6 +51,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up Enhanced PlateRecognizer from YAML."""
     _LOGGER.info("Setting up Enhanced PlateRecognizer image_processing platform from YAML.")
+
     api_token = config[CONF_API_TOKEN]
     regions = config[CONF_REGIONS]
     save_file_folder = config[CONF_SAVE_FILE_FOLDER]
@@ -78,29 +80,43 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
     await hass.async_add_executor_job(create_dir_sync)
 
-    entities = []
+    image_processing_entities = []
+    button_entities = []  # Lista do przechowywania encji przycisków
+
     for cam in cameras:
         camera_entity_id = cam["entity_id"]
         camera_friendly_name = cam.get("friendly_name", camera_entity_id.split(".")[-1])
-        entities.append(
-            EnhancedPlateRecognizer(
-                hass=hass,
-                camera_entity_id=camera_entity_id,
-                camera_friendly_name=camera_friendly_name,
-                api_token=api_token,
-                regions=regions,
-                save_file_folder=save_file_folder,
-                save_timestamped_file=save_timestamped_file,
-                always_save_latest_file=always_save_latest_file,
-                consecutive_captures=consecutive_captures,
-                capture_interval=capture_interval,
-                max_images=max_images,
-                plate_manager=plate_manager,
-                tolerate_one_mistake=tolerate_one_mistake,
-                global_manager=global_manager,
-            )
+
+        # Tworzenie encji image_processing
+        image_processing_entity = EnhancedPlateRecognizer(
+            hass=hass,
+            camera_entity_id=camera_entity_id,
+            camera_friendly_name=camera_friendly_name,
+            api_token=api_token,
+            regions=regions,
+            save_file_folder=save_file_folder,
+            save_timestamped_file=save_timestamped_file,
+            always_save_latest_file=always_save_latest_file,
+            consecutive_captures=consecutive_captures,
+            capture_interval=capture_interval,
+            max_images=max_images,
+            plate_manager=plate_manager,
+            tolerate_one_mistake=tolerate_one_mistake,
+            global_manager=global_manager,
         )
-    async_add_entities(entities)
+        image_processing_entities.append(image_processing_entity)
+
+        # Tworzenie encji przycisku
+        button_entity = PlateRecognitionButton(
+            hass=hass,
+            camera_entity_id=camera_entity_id,
+            camera_friendly_name=camera_friendly_name,
+            image_processing_entity=image_processing_entity,
+        )
+        button_entities.append(button_entity)
+
+    async_add_entities(image_processing_entities)
+    async_add_entities(button_entities) 
 
 class EnhancedPlateRecognizer(ImageProcessingEntity):
     """Representation of an Enhanced PlateRecognizer entity for a specific camera."""
@@ -147,6 +163,10 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         self._orientation = []
         self._processing = False
         self._attr_state = 0
+
+        sane_camera_name = self._camera_friendly_name.lower().replace(" ", "_").replace(".", "_")
+        self._camera_specific_recognized_sensor_id = f"sensor.recognized_car_{sane_camera_name}"
+        self._detect_known_plate_sensor_id = f"binary_sensor.detected_known_plate_{sane_camera_name}"
 
     @property
     def camera_entity(self):
@@ -561,3 +581,20 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
             previous_row = current_row
 
         return previous_row[-1]
+    
+class PlateRecognitionButton(ButtonEntity):
+    """Przycisk do uruchamiania rozpoznawania tablic dla określonej kamery."""
+
+    def __init__(self, hass, camera_entity_id, camera_friendly_name, image_processing_entity):
+        """Inicjalizacja przycisku."""
+        self.hass = hass
+        self._camera_entity_id = camera_entity_id
+        self._camera_friendly_name = camera_friendly_name
+        self._image_processing_entity = image_processing_entity  # Dodaj referencję do encji image_processing
+        self._attr_name = f"Rozpoznaj tablice - {self._camera_friendly_name}"
+        self._attr_unique_id = f"{DOMAIN}_button_{self._camera_entity_id.replace('.', '_')}"
+
+    async def async_press(self):
+        """Obsługuje naciśnięcie przycisku."""
+        _LOGGER.debug(f"Naciśnięto przycisk dla kamery {self._camera_entity_id}")
+        await self._image_processing_entity.async_scan_and_process()
