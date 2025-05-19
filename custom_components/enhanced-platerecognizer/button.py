@@ -130,7 +130,7 @@ class PlateRecognitionButton(ButtonEntity):
             )
             try:
                 await self.hass.services.async_call(
-                    "enhanced_platerecognizer",  # Zmieniono z "image_processing" na "enhanced_platerecognizer"
+                    "enhanced_platerecognizer",
                     "scan",
                     {"entity_id": target_entity},
                     blocking=False

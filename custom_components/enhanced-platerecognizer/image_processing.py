@@ -15,8 +15,8 @@ import homeassistant.helpers.config_validation as cv
 
 from .const import (
     DOMAIN,
-    CONF_API_KEY,
-    CONF_REGION,
+    CONF_API_TOKEN,
+    CONF_REGIONS,
     CONF_CONSECUTIVE_CAPTURES,
     CONF_CAPTURE_INTERVAL,
     CONF_SAVE_FILE_FOLDER,
@@ -30,8 +30,8 @@ _LOGGER = logging.getLogger(__name__)
 PLATE_READER_URL = "https://api.platerecognizer.com/v1/plate-reader/"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Required(CONF_API_KEY): cv.string,
-    vol.Required(CONF_REGION): cv.string,
+    vol.Required(CONF_API_TOKEN): cv.string,
+    vol.Optional(CONF_REGIONS, default=[]): vol.All(cv.ensure_list, [cv.string]),
     vol.Optional(CONF_SAVE_FILE_FOLDER, default="/config/www/Tablice"): cv.string,
     vol.Optional(CONF_MAX_IMAGES, default=10): vol.All(vol.Coerce(int), vol.Range(min=1, max=30)),
     vol.Optional(CONF_CONSECUTIVE_CAPTURES, default=1): vol.All(vol.Coerce(int), vol.Range(min=1, max=5)),
@@ -50,8 +50,8 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up Enhanced PlateRecognizer from YAML."""
     _LOGGER.info("Setting up Enhanced PlateRecognizer image_processing platform from YAML.")
-    api_key = config[CONF_API_KEY]
-    region = config[CONF_REGION]
+    api_token = config[CONF_API_TOKEN]
+    regions = config[CONF_REGIONS]
     save_file_folder = config[CONF_SAVE_FILE_FOLDER]
     max_images = config[CONF_MAX_IMAGES]
     consecutive_captures = config[CONF_CONSECUTIVE_CAPTURES]
@@ -87,8 +87,8 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
                 hass=hass,
                 camera_entity_id=camera_entity_id,
                 camera_friendly_name=camera_friendly_name,
-                api_key=api_key,
-                region=region,
+                api_token=api_token,
+                regions=regions,
                 save_file_folder=save_file_folder,
                 save_timestamped_file=save_timestamped_file,
                 always_save_latest_file=always_save_latest_file,
@@ -110,8 +110,8 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         hass,
         camera_entity_id,
         camera_friendly_name,
-        api_key,
-        region,
+        api_token,
+        regions,
         save_file_folder,
         save_timestamped_file,
         always_save_latest_file,
@@ -126,8 +126,8 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
         self.hass = hass
         self._camera_entity_id = camera_entity_id
         self._camera_friendly_name = camera_friendly_name
-        self._api_key = api_key
-        self._region = region
+        self._api_token = api_token
+        self._regions = regions
         self._save_file_folder = save_file_folder
         self._save_timestamped_file = save_timestamped_file
         self._always_save_latest_file = always_save_latest_file
@@ -159,7 +159,7 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
             "orientation": self._orientation,
             "camera_entity_id": self._camera_entity_id,
             "camera_friendly_name": self._camera_friendly_name,
-            "api_region": self._region,
+            "api_regions": self._regions,
             "save_file_folder": self._save_file_folder,
             "save_timestamped_file": self._save_timestamped_file,
             "always_save_latest_file": self._always_save_latest_file,
@@ -173,7 +173,7 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
     async def async_process_image(self, image_bytes: bytes):
         """Process an image using Plate Recognizer API."""
         # Przygotuj regiony na podstawie konfiguracji
-        self._regions_for_api = [self._region] if self._region and self._region != "none" else []
+        self._regions_for_api = self._regions if self._regions else []
         
         # Wywołaj API
         response = await self._call_plate_recognizer_api(image_bytes)
@@ -225,7 +225,7 @@ class EnhancedPlateRecognizer(ImageProcessingEntity):
 
     async def _call_plate_recognizer_api(self, image_bytes: bytes):
         """Call the Plate Recognizer API with the provided image bytes."""
-        headers = {"Authorization": f"Token {self._api_key}"}
+        headers = {"Authorization": f"Token {self._api_token}"}
         _LOGGER.debug(f"{self.name}: Wywoływanie API PlateRecognizer. URL: {PLATE_READER_URL}, Regiony: {self._regions_for_api}")
         try:
             timeout = aiohttp.ClientTimeout(total=60) # 60 sekund globalny timeout dla operacji

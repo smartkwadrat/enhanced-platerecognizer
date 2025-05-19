@@ -2,8 +2,8 @@
 DOMAIN = "enhanced_platerecognizer"
 CONF_NAME = "name"
 
-CONF_API_KEY = "api_key"
-CONF_REGION = "region"
+CONF_API_TOKEN = "api_token"
+CONF_REGIONS = "regions"
 CONF_CONSECUTIVE_CAPTURES = "consecutive_captures"
 CONF_CAPTURE_INTERVAL = "capture_interval"
 CONF_SAVE_FILE_FOLDER = "save_file_folder"
