@@ -1,17 +1,11 @@
 {
   "domain": "enhanced_platerecognizer",
   "name": "Enhanced Plate Recognizer",
-  "version": "0.2.8",
-  "config_flow": true,
-  "documentation": "https://github.com/smartkwadrat/enhanced-platerecognizer",
-  "requirements": [
-    "pyyaml"
-  ],
   "codeowners": ["@smartkwadrat"],
-  "iot_class": "local_push",
+  "documentation": "https://github.com/smartkwadrat/enhanced-platerecognizer",
+    "integration_type": "system",
+  "iot_class": "local_polling",
+  "requirements": ["pillow", "requests", "pyyaml"],
   "dependencies": [],
-  "platforms": [
-    "image_processing",
-    "device"
-  ]
+  "version": "0.2.8"
 }
