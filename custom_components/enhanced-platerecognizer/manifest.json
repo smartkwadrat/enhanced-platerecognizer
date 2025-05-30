@@ -5,7 +5,8 @@
   "documentation": "https://github.com/smartkwadrat/enhanced-platerecognizer",
     "integration_type": "system",
   "iot_class": "local_polling",
-  "requirements": ["pillow", "requests", "pyyaml"],
+  "requirements": ["pillow", "requests", "pyyaml", "aiofiles"],
   "dependencies": [],
-  "version": "0.3.0"
+  "version": "0.3.0",
+  "config_flow": false
 }

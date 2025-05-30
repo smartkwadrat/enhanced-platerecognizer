@@ -3,16 +3,18 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
+from homeassistant.helpers import discovery
 
+_LOGGER = logging.getLogger(__name__)
 DOMAIN = "enhanced_platerecognizer"
-PLATFORMS = [Platform.SENSOR, Platform.IMAGE_PROCESSING]
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Enhanced Plate Recognizer integration."""
+    _LOGGER.info("Enhanced Plate Recognizer: Setting up integration")
     
-    # Załaduj platformy
-    await hass.helpers.discovery.async_load_platform(Platform.SENSOR, DOMAIN, {}, config)
-    await hass.helpers.discovery.async_load_platform(Platform.IMAGE_PROCESSING, DOMAIN, {}, config)
+    # Jawnie załaduj sensor platform
+    await discovery.async_load_platform(hass, Platform.SENSOR, DOMAIN, {}, config)
+    _LOGGER.info("Enhanced Plate Recognizer: Sensor platform loaded")
     
     return True
 

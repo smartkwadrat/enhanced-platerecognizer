@@ -60,6 +60,7 @@ RED = (255, 0, 0)  # For objects within the ROI
 DEFAULT_REGIONS = ['None']
 
 CONF_CONSECUTIVE_CAPTURES = "consecutive_captures"
+CONF_TOLERATE_ONE_MISTAKE = "tolerate_one_mistake"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
@@ -78,6 +79,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_DETECTION_RULE, default=False): cv.string,
         vol.Optional(CONF_REGION_STRICT, default=False): cv.string,
         vol.Optional(CONF_CONSECUTIVE_CAPTURES, default=False): cv.boolean,
+        vol.Optional(CONF_TOLERATE_ONE_MISTAKE, default=True): cv.boolean,
     }
 )
 
@@ -130,6 +132,13 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         except Exception as e:
             _LOGGER.error("Nie udało się utworzyć folderu %r: %s", save_folder, e)
             save_folder = None
+            
+    # Przekaż tolerate_one_mistake do hass.data
+    domain = "enhanced_platerecognizer"
+    if domain not in hass.data:
+        hass.data[domain] = {}
+    
+    hass.data[domain]["tolerate_one_mistake"] = config.get(CONF_TOLERATE_ONE_MISTAKE, True)
 
     entities = []
     for camera in config[CONF_SOURCE]:
