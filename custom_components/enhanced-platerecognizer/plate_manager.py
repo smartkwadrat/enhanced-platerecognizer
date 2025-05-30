@@ -34,7 +34,11 @@ class PlateManager:
             if await aiofiles.os.path.exists(self.plates_file):
                 async with aiofiles.open(self.plates_file, 'r', encoding='utf-8') as file:
                     content = await file.read()
-                    data = yaml.safe_load(content) or {}
+                    if not content.strip():  # Plik pusty
+                        return {}
+                    data = yaml.safe_load(content)
+                    if data is None:  # Błędny YAML
+                        return {}
                     return data.get('plates', {})
             else:
                 await self._save_plates({})
@@ -58,10 +62,12 @@ class PlateManager:
     
     async def _setup_listeners(self, event):
         """Ustaw nasłuchiwanie zmian stanu."""
-        # Załaduj tablice asynchronicznie
-        self.known_plates = await self._load_plates()
-        _LOGGER.info(f"Załadowano {len(self.known_plates)} tablic")
+        # Załaduj tablice asynchronicznie z zabezpieczeniem
+        loaded_plates = await self._load_plates()
+        self.known_plates = loaded_plates if loaded_plates is not None else {}
         
+        _LOGGER.info(f"Załadowano {len(self.known_plates)} tablic")
+
         # Nasłuchuj zmian w input_text OSOBNO dla każdego
         async_track_state_change_event(
             self.hass,
@@ -86,7 +92,6 @@ class PlateManager:
         await self._update_input_select()
         _LOGGER.info("PlateManager listeners setup completed")
     
-    @callback
     async def _handle_plate_change(self, event):
         """Obsłuż zmianę w input_text.add_new_plate."""
         new_state = event.data.get('new_state')
@@ -100,7 +105,6 @@ class PlateManager:
             # Sprawdź czy mamy też właściciela i dodaj tablicę
             await self._try_add_plate()
     
-    @callback  
     async def _handle_owner_change(self, event):
         """Obsłuż zmianę w input_text.add_plate_owner."""
         new_state = event.data.get('new_state')
@@ -156,7 +160,6 @@ class PlateManager:
                     'owner': owner_name
                 })
     
-    @callback
     async def _handle_remove_plate(self, event):
         """Obsłuż usuwanie tablicy."""
         new_state = event.data.get('new_state')
@@ -184,7 +187,7 @@ class PlateManager:
     async def _update_input_select(self):
         """Zaktualizuj opcje w input_select z poprawną domyślną opcją."""
         try:
-            if not self.known_plates:
+            if not self.known_plates or len(self.known_plates) == 0:
                 # Puste plates.yaml - domyślnie "Brak tablic"
                 options = ["Brak tablic"]
                 default_option = "Brak tablic"
@@ -238,6 +241,9 @@ class PlateManager:
     
     def is_plate_known(self, plate: str) -> bool:
         """Sprawdź czy tablica jest znana."""
+        if self.known_plates is None:
+            return False
+        
         if plate.upper() in self.known_plates:
             return True
         
@@ -250,8 +256,12 @@ class PlateManager:
     
     def get_all_plates(self) -> Dict[str, str]:
         """Zwróć wszystkie znane tablice."""
+        if self.known_plates is None:
+            return {}
         return self.known_plates.copy()
-    
+
     def get_plates_count(self) -> int:
         """Zwróć liczbę znanych tablic."""
+        if self.known_plates is None:
+            return 0
         return len(self.known_plates)

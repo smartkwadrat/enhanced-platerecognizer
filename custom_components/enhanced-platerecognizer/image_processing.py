@@ -260,12 +260,22 @@ class PlateRecognizerEntity(ImageProcessingEntity):
             _LOGGER.error("platerecognizer error: %s", exc)
             _LOGGER.error(f"platerecognizer api response: {response}")
 
+        current_time = dt_util.now().strftime(DATETIME_FORMAT)
         if self._vehicles:
-            self._last_detection = dt_util.now().strftime(DATETIME_FORMAT)
+            self._last_detection = current_time
             self._state = self._last_detection
         else:
-            # opcjonalnie czyść stan gdy brak pojazdów
-            self._state = ""
+            # Dodajemy prefix by odróżnić stan "brak tablic" od timestampu
+            self._state = f"no_vehicles_{current_time}"
+        
+        # Emituj specjalny event po każdym przetworzeniu obrazu
+        self.hass.bus.fire('enhanced_platerecognizer_image_processed', {
+            'entity_id': self.entity_id,
+            'has_vehicles': bool(self._vehicles and not all(v == {} for v in self._vehicles)),
+            'vehicles': self._vehicles,
+            'timestamp': current_time
+        })
+
         if self._save_file_folder:
             if self._state or self._always_save_latest_file:
                 self.save_image()

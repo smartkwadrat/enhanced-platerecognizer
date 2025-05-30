@@ -7,6 +7,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
+import asyncio 
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,27 +96,56 @@ class RozpoznaneTablesKameraSensor(SensorEntity):
         self._attr_state = "Nie wykryto tablic"
 
     async def async_added_to_hass(self):
+        # Nasłuchuj zmian stanu encji (dla przypadków gdy event się nie wyemituje)
         async_track_state_change_event(
             self.hass,
             self._image_processing_entity,
             self._handle_state_change
         )
+        
+        # Nasłuchuj specjalnego eventu (główny mechanizm)
+        self.hass.bus.async_listen(
+            'enhanced_platerecognizer_image_processed', 
+            self._handle_image_processed
+        )
+        
         # od razu pokaż stan domyślny zamiast "unknown"
         self.async_write_ha_state()
         self.hass.async_create_task(self._delayed_update())
 
     async def _delayed_update(self):
-        import asyncio
         await asyncio.sleep(5)
         self._update_state()
         self.async_write_ha_state()
 
     @callback
     def _handle_state_change(self, event):
+        """Obsłuż zmianę stanu encji image_processing (backup mechanism)."""
         self._update_state()
         self.async_write_ha_state()
 
+    @callback
+    def _handle_image_processed(self, event):
+        """Obsłuż zdarzenie przetworzenia obrazu (primary mechanism)."""
+        if event.data.get('entity_id') == self._image_processing_entity:
+            # Wykorzystaj dane bezpośrednio z eventu - bardziej efektywne
+            if event.data.get('has_vehicles'):
+                vehicles = event.data.get('vehicles', [])
+                plates = [v.get('plate') for v in vehicles if v.get('plate')]
+                plates_str = ', '.join(plates) if plates else 'Nie wykryto tablic'
+            else:
+                plates_str = 'Nie wykryto tablic'
+            
+            timestamp = event.data.get('timestamp', '')
+            if timestamp:
+                self._attr_state = f"{plates_str} @ {timestamp}"
+            else:
+                self._attr_state = plates_str
+                
+            self.async_write_ha_state()
+
     def _update_state(self):
+        """Aktualizuj stan na podstawie aktualnego stanu encji (backup method)."""
         image_processing = self.hass.states.get(self._image_processing_entity)
         if not image_processing or image_processing.state in ["unavailable", "unknown"]:
             self._attr_state = "Kamera niedostępna"
@@ -134,6 +164,7 @@ class RozpoznaneTablesKameraSensor(SensorEntity):
             self._attr_state = f"{plates_str} @ {last_detection}"
         else:
             self._attr_state = plates_str
+            
 
 class FormattedCarPlatesSensor(SensorEntity):
     """Sensor z listą znanych tablic z właścicielami."""
@@ -159,6 +190,7 @@ class FormattedCarPlatesSensor(SensorEntity):
             self._handle_state_change
         )
         self._update_attributes()
+        self.async_write_ha_state()  # DODANE
     
     @callback
     def _handle_plate_change(self, event):
@@ -174,18 +206,23 @@ class FormattedCarPlatesSensor(SensorEntity):
     
     def _update_attributes(self):
         """Zaktualizuj atrybuty z tablicami i właścicielami."""
-        # Pobierz dane bezpośrednio z PlateManager
         plate_manager = self.hass.data.get(DOMAIN, {}).get('plate_manager')
         if plate_manager:
             plates_dict = plate_manager.get_all_plates()
             if plates_dict:
-                # Format: "tablica - właściciel"
-                formatted_list = '\n'.join([f"{plate} - {owner}" for plate, owner in plates_dict.items()])
-                self._attr_extra_state_attributes = {'formatted_list': formatted_list}
+                sorted_plates = sorted(plates_dict.items())
+                formatted_list = '\n'.join([f"{plate} - {owner}" for plate, owner in sorted_plates])
+                self._attr_extra_state_attributes = {
+                    'formatted_list': formatted_list,
+                    'total_plates': len(plates_dict)
+                }
+                self._attr_state = f"Znane tablice rejestracyjne ({len(plates_dict)})"
             else:
-                self._attr_extra_state_attributes = {'formatted_list': 'Brak znanych tablic'}
+                self._attr_extra_state_attributes = {'formatted_list': 'Brak znanych tablic', 'total_plates': 0}
+                self._attr_state = "Znane tablice rejestracyjne (0)"
         else:
-            self._attr_extra_state_attributes = {'formatted_list': 'PlateManager nie dostępny'}
+            self._attr_extra_state_attributes = {'formatted_list': 'PlateManager nie dostępny', 'total_plates': 0}
+            self._attr_state = "PlateManager nie dostępny"
 
 class PlateRecognitionSensor(SensorEntity):
     """Sensor rozpoznawania tablic dla konkretnej kamery (Last Detection)."""
@@ -200,21 +237,60 @@ class PlateRecognitionSensor(SensorEntity):
         self._attr_state = "Nie wykryto tablic"
 
     async def async_added_to_hass(self):
+        # Nasłuchuj zmian stanu (istniejący kod)
         async_track_state_change_event(
             self.hass,
             self._image_processing_entity,
             self._handle_state_change
         )
+        
+        # Nasłuchuj specjalnego eventu dla natychmiastowych reakcji
+        self.hass.bus.async_listen(
+            'enhanced_platerecognizer_image_processed', 
+            self._handle_image_processed
+        )
+        
         # od razu pokaż stan domyślny
         self._update_state()
         self.async_write_ha_state()
 
     @callback
     def _handle_state_change(self, event):
+        """Obsłuż zmianę stanu encji image_processing."""
         self._update_state()
         self.async_write_ha_state()
 
+    @callback
+    def _handle_image_processed(self, event):
+        """Obsłuż zdarzenie przetworzenia obrazu."""
+        if event.data.get('entity_id') == self._image_processing_entity:
+            if event.data.get('has_vehicles'):
+                vehicles = event.data.get('vehicles', [])
+                plates = [v.get('plate') for v in vehicles if v.get('plate')]
+                plates_str = ', '.join(plates) if plates else 'Nie wykryto tablic'
+                
+                # Dodatkowe atrybuty
+                self._attr_extra_state_attributes = {
+                    'vehicles_count': len(vehicles),
+                    'plates_count': len(plates),
+                    'raw_vehicles': vehicles
+                }
+            else:
+                plates_str = 'Nie wykryto tablic'
+                self._attr_extra_state_attributes = {
+                    'vehicles_count': 0,
+                    'plates_count': 0
+                }
+            
+            timestamp = event.data.get('timestamp', '').strip()
+            if timestamp:
+                self._attr_state = f"{plates_str} @ {timestamp}"
+            else:
+                self._attr_state = plates_str
+            self.async_write_ha_state()
+
     def _update_state(self):
+        """Aktualizuj stan na podstawie aktualnego stanu encji image_processing."""
         image_processing = self.hass.states.get(self._image_processing_entity)
         if not image_processing or image_processing.state in ["unavailable", "unknown"]:
             self._attr_state = "Kamera niedostępna"
@@ -227,8 +303,12 @@ class PlateRecognitionSensor(SensorEntity):
         else:
             plates_str = 'Nie wykryto tablic'
 
-        last_detection = image_processing.attributes.get('last_detection', '')
-        self._attr_state = f"{plates_str} @ {last_detection}"
+        last_detection = image_processing.attributes.get('last_detection', '').strip()
+        # POPRAWKA: Sprawdź czy last_detection nie jest pusty
+        if last_detection:
+            self._attr_state = f"{plates_str} @ {last_detection}"
+        else:
+            self._attr_state = plates_str
 
 class CombinedPlatesSensor(SensorEntity):
     """Sensor rozpoznane_tablice (kombinuje dane z obu kamer)."""
@@ -240,6 +320,7 @@ class CombinedPlatesSensor(SensorEntity):
         self._attr_unique_id = "rozpoznane_tablice"
         self.entity_id = "sensor.rozpoznane_tablice"
         self._attr_state = "Brak tablic"
+        self._last_detections = {}  # Cache najnowszych wykryć z każdej kamery
 
     async def async_added_to_hass(self):
         if self._image_processing_entities:
@@ -248,44 +329,121 @@ class CombinedPlatesSensor(SensorEntity):
                 self._image_processing_entities,
                 self._handle_state_change
             )
+            
+            # Dodaj nasłuchiwanie specjalnego eventu
+            self.hass.bus.async_listen(
+                'enhanced_platerecognizer_image_processed', 
+                self._handle_image_processed
+            )
         # od razu pokaż stan domyślny
         self._update_state()
         self.async_write_ha_state()
 
     @callback
+    def _handle_image_processed(self, event):
+        """Obsłuż zdarzenie przetworzenia obrazu."""
+        entity_id = event.data.get('entity_id')
+        if entity_id in self._image_processing_entities:
+            # OPTYMALIZACJA: Wykorzystaj dane bezpośrednio z eventu
+            timestamp = event.data.get('timestamp', '')
+            
+            if event.data.get('has_vehicles'):
+                vehicles = event.data.get('vehicles', [])
+                plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
+                detection_text = ', '.join(plates) if plates else 'Nie wykryto tablic'
+            else:
+                detection_text = 'Nie wykryto tablic'
+            
+            # Zapisz najnowsze wykrycie z tej kamery
+            self._last_detections[entity_id] = {
+                'text': detection_text,
+                'timestamp': timestamp,
+                'has_plates': detection_text != 'Nie wykryto tablic'
+            }
+            
+            # Wybierz najnowsze wykrycie z tablicami lub najnowsze w ogóle
+            self._update_combined_state()
+            self.async_write_ha_state()
+
+    @callback
     def _handle_state_change(self, event):
+        """Obsłuż zmianę stanu encji (backup mechanism)."""
         self._update_state()
         self.async_write_ha_state()
 
+    def _update_combined_state(self):
+        """Zaktualizuj stan na podstawie cache'owanych wykryć."""
+        if not self._last_detections:
+            self._attr_state = "Brak tablic"
+            return
+        
+        # Znajdź najnowsze wykrycie z tabliami
+        valid_detections = [d for d in self._last_detections.values() if d['has_plates']]
+        
+        if valid_detections:
+            # Wybierz najnowsze wykrycie z tabliami
+            latest = max(valid_detections, key=lambda x: x['timestamp'])
+            self._attr_state = latest['text']
+        else:
+            # Jeśli żadne nie ma tablic, pokaż "Nie wykryto tablic"
+            self._attr_state = "Nie wykryto tablic"
+        
+        # Dodaj atrybuty z informacjami o wszystkich kamerach
+        self._attr_extra_state_attributes = {
+            'camera_states': {entity_id: data['text'] for entity_id, data in self._last_detections.items()},
+            'camera_timestamps': {entity_id: data['timestamp'] for entity_id, data in self._last_detections.items()}
+        }
+
     def _update_state(self):
+        """Zaktualizuj stan na podstawie aktualnych stanów encji (backup method)."""
         if not self._image_processing_entities:
             self._attr_state = "Brak tablic"
             return
 
-        camera_states = []
-        camera_times = []
+        camera_data = []
         for entity_id in self._image_processing_entities:
             state = self.hass.states.get(entity_id)
             if not state or state.state in ["unavailable", "unknown"]:
                 continue
+                
             vehicles = state.attributes.get('vehicles', [])
             if vehicles:
-                plates = [v.get('plate') for v in vehicles if v.get('plate')]
-                camera_states.append(', '.join(plates) if plates else 'Nie wykryto tablic')
+                # POPRAWKA: Sprawdź czy plate nie jest None
+                plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
+                detection_text = ', '.join(plates) if plates else 'Nie wykryto tablic'
             else:
-                camera_states.append('Nie wykryto tablic')
-            camera_times.append(state.last_changed)
+                detection_text = 'Nie wykryto tablic'
+            
+            # Użyj last_updated zamiast last_changed dla lepszej precyzji
+            timestamp = state.last_updated
+            camera_data.append({
+                'entity_id': entity_id,
+                'text': detection_text,
+                'timestamp': timestamp,
+                'has_plates': detection_text != 'Nie wykryto tablic'
+            })
 
-        if not camera_states:
+        if not camera_data:
             self._attr_state = "Kamery niedostępne"
             return
 
-        valid = [(s, t) for s, t in zip(camera_states, camera_times) if s != 'Nie wykryto tablic']
-        if valid:
-            latest_state = max(valid, key=lambda x: x[1])[0]
-            self._attr_state = latest_state
+        # Aktualizuj cache
+        self._last_detections = {d['entity_id']: d for d in camera_data}
+        
+        # Wybierz najnowsze wykrycie z tabliami
+        valid_detections = [d for d in camera_data if d['has_plates']]
+        
+        if valid_detections:
+            latest = max(valid_detections, key=lambda x: x['timestamp'])
+            self._attr_state = latest['text']
         else:
             self._attr_state = "Nie wykryto tablic"
+        
+        # Dodaj atrybuty
+        self._attr_extra_state_attributes = {
+            'camera_states': {d['entity_id']: d['text'] for d in camera_data},
+            'available_cameras': len(camera_data)
+        }
 
 class LastRecognizedCarSensor(RestoreEntity, SensorEntity):
     """Sensor zapamiętujący ostatnio rozpoznane tablice."""
@@ -297,28 +455,79 @@ class LastRecognizedCarSensor(RestoreEntity, SensorEntity):
         self.entity_id = "sensor.last_recognized_car"
         # Domyślna wartość przed przywróceniem
         self._attr_native_value = "Brak rozpoznanych tablic"
+        self._last_update_source = None  # Śledź źródło ostatniej aktualizacji
 
     async def async_added_to_hass(self):
         """Przywróć poprzedni stan i zacznij nasłuchiwać zmian."""
         await super().async_added_to_hass()
-        last = await self.async_get_last_sensor_data()
-        if last:
-            self._attr_native_value = last.native_value
-        async_track_state_change_event(
-            self.hass,
-            "sensor.rozpoznane_tablice",
-            self._handle_state_change
+        
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state:
+            self._attr_native_value = last_state.state
+
+        # WYBIERZ JEDEN MECHANIZM - zalecam event jako główny
+        # async_track_state_change_event(
+        #     self.hass,
+        #     "sensor.rozpoznane_tablice",
+        #     self._handle_state_change
+        # )
+
+        # Główny mechanizm - nasłuchuj eventu
+        self.hass.bus.async_listen(
+            'enhanced_platerecognizer_image_processed', 
+            self._handle_image_processed
         )
-        # od razu pokaż przywrócony lub domyślny stan
+
         self.async_write_ha_state()
 
     @callback
+    def _handle_image_processed(self, event):
+        """Obsłuż zdarzenie przetworzenia obrazu."""
+        # Zapobiegaj duplikatom jeśli ten sam event przyszedł z różnych źródeł
+        event_time = event.data.get('timestamp', '')
+        if self._last_update_source == f"event_{event_time}":
+            return
+        self._last_update_source = f"event_{event_time}"
+        
+        if event.data.get('has_vehicles'):
+            vehicles = event.data.get('vehicles', [])
+            # POPRAWKA: Sprawdź czy plate nie jest None
+            plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
+            if plates:
+                self._attr_native_value = ', '.join(plates)
+                # Dodaj timestamp jako atrybut
+                self._attr_extra_state_attributes = {
+                    'last_detection_time': event_time,
+                    'detection_source': 'direct_event'
+                }
+                self.async_write_ha_state()
+        # OPCJONALNIE: Jeśli chcesz aktualizować też gdy nie ma tablic
+        # else:
+        #     # Nie zmieniaj _attr_native_value, ale zaktualizuj timestamp
+        #     self._attr_extra_state_attributes = {
+        #         'last_scan_time': event_time,
+        #         'detection_source': 'direct_event'
+        #     }
+        #     self.async_write_ha_state()
+
+    @callback
     def _handle_state_change(self, event):
-        """Aktualizuj stan na każdą istotną zmianę rozpoznania."""
+        """Obsłuż zmianę stanu sensor.rozpoznane_tablice (backup mechanism)."""
         new = event.data.get("new_state")
         if not new or new.state in ["Brak tablic", "Nie wykryto tablic", "Kamery niedostępne", "", None]:
             return
+
+        # Zapobiegaj duplikatom
+        state_time = new.last_updated.isoformat()
+        if self._last_update_source == f"state_{state_time}":
+            return
+        self._last_update_source = f"state_{state_time}"
+
         self._attr_native_value = new.state
+        self._attr_extra_state_attributes = {
+            'last_detection_time': state_time,
+            'detection_source': 'state_change'
+        }
         self.async_write_ha_state()
 
 class RecognizedCarSensor(SensorEntity):
@@ -329,44 +538,61 @@ class RecognizedCarSensor(SensorEntity):
         self._attr_name = "Recognized Car"
         self._attr_unique_id = "recognized_car"
         self._attr_state = "Nie wykryto tablic"
+        self._clear_task = None
 
     async def async_added_to_hass(self):
-        async_track_state_change_event(
-            self.hass,
-            'sensor.rozpoznane_tablice',
-            self._handle_state_change
+        await super().async_added_to_hass()
+        
+        # Tylko event - prostsze
+        self.hass.bus.async_listen(
+            'enhanced_platerecognizer_image_processed', 
+            self._handle_image_processed
         )
 
     @callback
-    def _handle_state_change(self, event):
-        new_state = event.data.get('new_state')
-        if not new_state or new_state.state in ["Kamery niedostępne", "Nie wykryto tablic"]:
+    def _handle_image_processed(self, event):
+        """Obsłuż zdarzenie przetworzenia obrazu."""
+        if not event.data.get('has_vehicles'):
             return
-
-        plates_str = new_state.state.split('@')[0].strip()
-        plates = [p.strip().upper() for p in plates_str.split(',') if p.strip()]
+        
+        vehicles = event.data.get('vehicles', [])
+        plates = [v.get('plate').upper() for v in vehicles if v.get('plate') is not None]
+        
+        if not plates:
+            return
+        
         plate_manager = self.hass.data.get(DOMAIN, {}).get("plate_manager")
-        if not plate_manager or not plates:
-            self._attr_state = "Nie wykryto tablic"
+        if not plate_manager:
+            return
+        
+        # Anuluj poprzedni task
+        if self._clear_task and not self._clear_task.done():
+            self._clear_task.cancel()
+        
+        recognized = [p for p in plates if plate_manager.is_plate_known(p)]
+        if recognized:
+            # Pobierz właścicieli dla wszystkich rozpoznanych tablic
+            owners_info = []
+            for plate in recognized:
+                owner = plate_manager.get_plate_owner(plate)
+                owners_info.append(f"{plate} ({owner})")
+            
+            self._attr_state = f"Rozpoznano: {', '.join(owners_info)}"
         else:
-            recognized = [p for p in plates if plate_manager.is_plate_known(p)]
-            if recognized:
-                owner = plate_manager.get_plate_owner(recognized[0])
-                text = f"Rozpoznano: {recognized[0]} ({owner})"
-                if len(recognized) > 1:
-                    text += f" + {len(recognized) - 1} innych"
-                self._attr_state = text
-            else:
-                self._attr_state = f"Nie rozpoznano: {', '.join(plates)}"
-
+            self._attr_state = f"Nie rozpoznano: {', '.join(plates)}"
+        
         self.async_write_ha_state()
-        # usuń po 10s
-        import asyncio
-        self.hass.async_create_task(self._clear_after_delay())
+        
+        # Usuń po 10s
+        self._clear_task = self.hass.async_create_task(self._clear_after_delay())
 
     async def _clear_after_delay(self):
-        import asyncio
-        await asyncio.sleep(10)
-        self._attr_state = "Nie wykryto tablic"
-        self.async_write_ha_state()
+        """Wyczyść stan po 10 sekundach."""
+        try:
+            await asyncio.sleep(10)
+            self._attr_state = "Nie wykryto tablic"
+            self.async_write_ha_state()
+        except asyncio.CancelledError:
+            pass
+
 
