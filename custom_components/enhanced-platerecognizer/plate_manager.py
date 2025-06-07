@@ -12,16 +12,15 @@ from homeassistant.const import EVENT_HOMEASSISTANT_START
 _LOGGER = logging.getLogger(__name__)
 
 class PlateManager:
-    """Zarządza tablicami rejestracyjnymi."""
-    
     def __init__(self, hass: HomeAssistant, config: Dict[str, Any]):
         """Inicjalizuj PlateManager."""
         self.hass = hass
         self.config = config
         self.tolerate_one_mistake = config.get('tolerate_one_mistake', True)
         
-        integration_dir = os.path.dirname(__file__)
-        self.plates_file = os.path.join(integration_dir, 'plates.yaml')
+        # Zmieniona ścieżka - teraz wskazuje na /config/enhanced_platerecognizer_plates.yaml
+        file_name = "plates.yaml"
+        self.plates_file = self.hass.config.path(file_name)
         
         # Załaduj tablice asynchronicznie w setup_listeners
         self.known_plates = {}
