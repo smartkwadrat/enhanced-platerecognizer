@@ -264,3 +264,18 @@ class PlateManager:
         if self.known_plates is None:
             return 0
         return len(self.known_plates)
+
+    def get_corrected_plate(self, plate: str) -> str:
+        """Zwróć poprawną tablicę z pliku, jeśli jest podobna."""
+        plate_upper = plate.upper()
+        if plate_upper in self.known_plates:
+            return plate_upper # Zwróć oryginał jeśli jest dokładne dopasowanie
+
+        if self.tolerate_one_mistake:
+            for known_plate in self.known_plates:
+                if self._plates_similar(plate_upper, known_plate):
+                    # Znaleziono podobną tablicę, zwróć tę z pliku .yaml
+                    return known_plate
+
+        # Jeśli nie znaleziono podobnej, zwróć oryginalną tablicę
+        return plate

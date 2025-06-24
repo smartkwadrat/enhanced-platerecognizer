@@ -459,12 +459,22 @@ class CombinedPlatesSensor(SensorEntity):
             
             if event.data.get('has_vehicles'):
                 vehicles = event.data.get('vehicles', [])
-                plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
-                detection_text = ', '.join(plates) if plates else 'Nie wykryto tablic'
+                api_plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
+
+                # --- POCZĄTEK MODYFIKACJI ---
+                plate_manager = self.hass.data.get(DOMAIN, {}).get('plate_manager')
+                if plate_manager and api_plates:
+                    corrected_plates = [plate_manager.get_corrected_plate(p) for p in api_plates]
+                    detection_text = ', '.join(corrected_plates)
+                elif api_plates:
+                    detection_text = ', '.join(api_plates) # Fallback, gdyby plate_manager nie był dostępny
+                else:
+                    detection_text = 'Nie wykryto tablic'
+                # --- KONIEC MODYFIKACJI ---
+                
                 _LOGGER.info(f"Sensor {self.entity_id}: wykryto tablice: {detection_text}")
             else:
                 detection_text = 'Nie wykryto tablic'
-                _LOGGER.info(f"Sensor {self.entity_id}: brak pojazdów")
             
             # Zapisz najnowsze wykrycie z tej kamery
             self._last_detections[entity_id] = {
