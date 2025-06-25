@@ -450,39 +450,43 @@ class CombinedPlatesSensor(SensorEntity):
         """Obsłuż zdarzenie przetworzenia obrazu."""
         entity_id = event.data.get('entity_id')
         _LOGGER.info(f"Sensor {self.entity_id}: otrzymał event od {entity_id}")
-        
+
         if entity_id in self._image_processing_entities:
             _LOGGER.info(f"Sensor {self.entity_id}: event pasuje, przetwarzam")
             
-            # Wykorzystaj dane bezpośrednio z eventu
             timestamp = event.data.get('timestamp', '')
-            
             if event.data.get('has_vehicles'):
                 vehicles = event.data.get('vehicles', [])
                 api_plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
-
-                # --- POCZĄTEK MODYFIKACJI ---
+                
                 plate_manager = self.hass.data.get(DOMAIN, {}).get('plate_manager')
                 if plate_manager and api_plates:
-                    corrected_plates = [plate_manager.get_corrected_plate(p) for p in api_plates]
-                    detection_text = ', '.join(corrected_plates)
-                elif api_plates:
-                    detection_text = ', '.join(api_plates) # Fallback, gdyby plate_manager nie był dostępny
+                    # Filtruj tylko znane tablice i zwróć wersje z plates.yaml
+                    known_plates = []
+                    for plate in api_plates:
+                        if plate_manager.is_plate_known(plate):
+                            corrected_plate = plate_manager.get_corrected_plate(plate)
+                            known_plates.append(corrected_plate)
+                    
+                    if known_plates:
+                        detection_text = ', '.join(known_plates)
+                        _LOGGER.info(f"Sensor {self.entity_id}: znalezione znane tablice: {detection_text}")
+                    else:
+                        detection_text = 'Nie wykryto znanych tablic'
+                        _LOGGER.info(f"Sensor {self.entity_id}: API zwróciło tablice, ale żadna nie jest znana")
                 else:
-                    detection_text = 'Nie wykryto tablic'
-                # --- KONIEC MODYFIKACJI ---
-                
-                _LOGGER.info(f"Sensor {self.entity_id}: wykryto tablice: {detection_text}")
+                    detection_text = 'Nie wykryto znanych tablic'
+                   
             else:
                 detection_text = 'Nie wykryto tablic'
-            
+
             # Zapisz najnowsze wykrycie z tej kamery
             self._last_detections[entity_id] = {
                 'text': detection_text,
                 'timestamp': timestamp,
-                'has_plates': detection_text != 'Nie wykryto tablic'
+                'has_plates': detection_text not in ['Nie wykryto tablic', 'Nie wykryto znanych tablic']
             }
-            
+
             # Wybierz najnowsze wykrycie z tablicami lub najnowsze w ogóle
             self._update_combined_state()
             _LOGGER.info(f"Sensor {self.entity_id}: nowy stan: {self._attr_state}")
@@ -526,25 +530,41 @@ class CombinedPlatesSensor(SensorEntity):
             self._attr_state = "Brak tablic"
             return
 
+        plate_manager = self.hass.data.get(DOMAIN, {}).get('plate_manager')
         camera_data = []
+        
         for entity_id in self._image_processing_entities:
             state = self.hass.states.get(entity_id)
             if not state or state.state in ["unavailable", "unknown"]:
                 continue
-                
+
             vehicles = state.attributes.get('vehicles', [])
             if vehicles:
                 plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
-                detection_text = ', '.join(plates) if plates else 'Nie wykryto tablic'
+                
+                if plate_manager and plates:
+                    known_plates = []
+                    for plate in plates:
+                        if plate_manager.is_plate_known(plate):
+                            corrected_plate = plate_manager.get_corrected_plate(plate)
+                            known_plates.append(corrected_plate)
+                    
+                    if known_plates:
+                        detection_text = ', '.join(known_plates)
+                    else:
+                        detection_text = 'Nie wykryto znanych tablic'
+                else:
+                    detection_text = 'Nie wykryto znanych tablic'
+
             else:
                 detection_text = 'Nie wykryto tablic'
-            
+
             timestamp = state.last_updated
             camera_data.append({
                 'entity_id': entity_id,
                 'text': detection_text,
                 'timestamp': timestamp,
-                'has_plates': detection_text != 'Nie wykryto tablic'
+                'has_plates': detection_text not in ['Nie wykryto tablic', 'Nie wykryto znanych tablic']
             })
 
         if not camera_data:
@@ -553,16 +573,15 @@ class CombinedPlatesSensor(SensorEntity):
 
         # Aktualizuj cache
         self._last_detections = {d['entity_id']: d for d in camera_data}
-        
-        # Wybierz najnowsze wykrycie z tabliami
+
+        # Wybierz najnowsze wykrycie z tablicami
         valid_detections = [d for d in camera_data if d['has_plates']]
-        
         if valid_detections:
             latest = max(valid_detections, key=lambda x: x['timestamp'])
             self._attr_state = latest['text']
         else:
-            self._attr_state = "Nie wykryto tablic"
-        
+            self._attr_state = "Nie wykryto znanych tablic"
+
         # Dodaj atrybuty
         self._attr_extra_state_attributes = {
             'camera_states': {d['entity_id']: d['text'] for d in camera_data},
