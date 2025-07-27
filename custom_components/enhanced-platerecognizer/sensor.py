@@ -679,17 +679,15 @@ class RecognizedCarSensor(SensorEntity):
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         _LOGGER.info(f"Sensor {self._attr_unique_id}: inicjalizacja rozpoczęta")
-        
         # Sprawdź dostępność PlateManager
         plate_manager = self.hass.data.get(DOMAIN, {}).get("plate_manager")
         if plate_manager:
             _LOGGER.info(f"Sensor {self._attr_unique_id}: PlateManager jest dostępny")
         else:
             _LOGGER.error(f"Sensor {self._attr_unique_id}: PlateManager NIE JEST dostępny!")
-        
         # Nasłuchuj eventu
         self.hass.bus.async_listen(
-            'enhanced_platerecognizer_image_processed', 
+            'enhanced_platerecognizer_image_processed',
             self._handle_image_processed
         )
         _LOGGER.info(f"Sensor {self._attr_unique_id}: zarejestrowano nasłuchiwanie eventu")
@@ -698,45 +696,36 @@ class RecognizedCarSensor(SensorEntity):
     def _handle_image_processed(self, event):
         """Obsłuż zdarzenie przetworzenia obrazu."""
         _LOGGER.info(f"Sensor {self._attr_unique_id}: otrzymał event, has_vehicles: {event.data.get('has_vehicles')}")
-        
         if not event.data.get('has_vehicles'):
             _LOGGER.debug(f"Sensor {self._attr_unique_id}: brak pojazdów, ignoruję")
             return
-
         vehicles = event.data.get('vehicles', [])
         plates = [v.get('plate').upper() for v in vehicles if v.get('plate') is not None]
-        
         if not plates:
             _LOGGER.debug(f"Sensor {self._attr_unique_id}: brak tablic, ignoruję")
             return
-
         _LOGGER.info(f"Sensor {self._attr_unique_id}: przetwarzam tablice: {plates}")
-
         plate_manager = self.hass.data.get(DOMAIN, {}).get("plate_manager")
         if not plate_manager:
             _LOGGER.error(f"Sensor {self._attr_unique_id}: PlateManager nie dostępny podczas przetwarzania!")
             return
-
         # Anuluj poprzedni task
         if self._clear_task and not self._clear_task.done():
             self._clear_task.cancel()
-
         recognized = [p for p in plates if plate_manager.is_plate_known(p)]
         if recognized:
-            # Pobierz właścicieli dla wszystkich rozpoznanych tablic
+            # Pobierz właścicieli dla wszystkich rozpoznanych tablic – ZMIANA: Użyj poprawionej tablicy z plates.yaml
             owners_info = []
             for plate in recognized:
-                owner = plate_manager.get_plate_owner(plate)
-                owners_info.append(f"{plate} ({owner})")
-            
+                corrected_plate = plate_manager.get_corrected_plate(plate)  # Pobierz wersję z plates.yaml (z tolerate_one_mistake)
+                owner = plate_manager.get_plate_owner(corrected_plate)  # Pobierz właściciela na podstawie poprawionej tablicy
+                owners_info.append(f"{corrected_plate} ({owner})")  # ZMIANA: Użyj corrected_plate zamiast oryginalnego plate
             self._attr_state = f"Rozpoznano: {', '.join(owners_info)}"
             _LOGGER.info(f"Sensor {self._attr_unique_id}: rozpoznano tablice: {self._attr_state}")
         else:
             self._attr_state = f"Nie rozpoznano: {', '.join(plates)}"
             _LOGGER.info(f"Sensor {self._attr_unique_id}: nie rozpoznano tablic: {self._attr_state}")
-
         self.async_write_ha_state()
-
         # Usuń po 10s
         self._clear_task = self.hass.async_create_task(self._clear_after_delay())
 
