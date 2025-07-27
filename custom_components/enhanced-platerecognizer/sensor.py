@@ -19,6 +19,9 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     """Set up the sensor platform."""
     _LOGGER.info("Enhanced Plate Recognizer: async_setup_platform called!")
     
+    # NOWOŚĆ: Dodaj opóźnienie, aby image_processing się załadowało
+    await asyncio.sleep(5)
+
     # SPRAWDŹ WSZYSTKIE ENCJE IMAGE_PROCESSING:
     all_entities = hass.states.async_entity_ids('image_processing')
     _LOGGER.info(f"Wszystkie encje image_processing: {all_entities}")
