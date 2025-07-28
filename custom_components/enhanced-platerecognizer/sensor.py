@@ -77,32 +77,46 @@ class PlateRecognitionCameraSensor(SensorEntity):
 
     def _get_translation(self, key: str, **kwargs) -> str:
         """Get translated text based on current language setting."""
-        try:
-            language = self.hass.config.language if self.hass else 'en'
-            if language != 'pl':
-                language = 'en'
-            
-            # Try to get translations from hass.data or fallback to hardcoded
-            translations = self.hass.data.get(DOMAIN, {}).get('translations', {}).get(language, {})
-            
-            # Navigate through translation structure
-            keys = key.split('.')
-            current = translations
-            for k in keys:
-                if isinstance(current, dict) and k in current:
-                    current = current[k]
-                else:
-                    # Fallback to English hardcoded values
-                    return self._get_fallback_translation(key, **kwargs)
-            
-            # Format with provided kwargs if it's a string
-            if isinstance(current, str) and kwargs:
-                return current.format(**kwargs)
-            return current if isinstance(current, str) else self._get_fallback_translation(key, **kwargs)
-            
-        except Exception as e:
-            _LOGGER.debug(f"Translation error for key '{key}': {e}")
+        language = self.hass.config.language if self.hass else 'en'
+        _LOGGER.debug(f"Detected language: {language} for key: {key}")
+        
+        if language == 'pl':
+            return self._get_polish_translation(key, **kwargs)
+        else:
             return self._get_fallback_translation(key, **kwargs)
+
+    def _get_polish_translation(self, key: str, **kwargs) -> str:
+        """Polish translations hardcoded."""
+        polish_translations = {
+            # PlateRecognitionCameraSensor
+            'state.sensor.plate_recognition_camera.waiting_api': 'Oczekiwanie na API',
+            'state.sensor.plate_recognition_camera.no_plates': 'Nie wykryto tablic',
+            'state.sensor.plate_recognition_camera.vehicle_no_plate': 'Wykryto pojazd bez tablicy',
+            'state.sensor.plate_recognition_camera.camera_unavailable': 'Kamera niedostępna',
+            
+            # RecognizedCarSensor
+            'state.sensor.recognized_car.no_plates': 'Nie wykryto tablic',
+            'state.sensor.recognized_car.recognized': 'Rozpoznano: {plates}',
+            'state.sensor.recognized_car.not_recognized': 'Nie rozpoznano: {plates}',
+            
+            # LastRecognizedCarSensor
+            'state.sensor.last_recognized_car.no_recognized': 'Brak rozpoznanych tablic',
+            
+            # FormattedCarPlatesSensor
+            'state.sensor.formatted_car_plates.known_plates': 'Znane tablice rejestracyjne',
+            'state.sensor.formatted_car_plates.known_plates_count': 'Znane tablice rejestracyjne ({count})',
+            'state.sensor.formatted_car_plates.no_known_plates': 'Brak znanych tablic',
+            'state.sensor.formatted_car_plates.manager_unavailable': 'PlateManager nie dostępny',
+        }
+        
+        result = polish_translations.get(key, self._get_fallback_translation(key, **kwargs))
+        if kwargs:
+            try:
+                result = result.format(**kwargs)
+            except:
+                pass
+        return result
+
 
     def _get_fallback_translation(self, key: str, **kwargs) -> str:
         """Fallback translations when translation system fails."""
@@ -205,32 +219,46 @@ class FormattedCarPlatesSensor(SensorEntity):
 
     def _get_translation(self, key: str, **kwargs) -> str:
         """Get translated text based on current language setting."""
-        try:
-            language = self.hass.config.language if self.hass else 'en'
-            if language != 'pl':
-                language = 'en'
-            
-            # Try to get translations from hass.data or fallback to hardcoded
-            translations = self.hass.data.get(DOMAIN, {}).get('translations', {}).get(language, {})
-            
-            # Navigate through translation structure
-            keys = key.split('.')
-            current = translations
-            for k in keys:
-                if isinstance(current, dict) and k in current:
-                    current = current[k]
-                else:
-                    # Fallback to English hardcoded values
-                    return self._get_fallback_translation(key, **kwargs)
-            
-            # Format with provided kwargs if it's a string
-            if isinstance(current, str) and kwargs:
-                return current.format(**kwargs)
-            return current if isinstance(current, str) else self._get_fallback_translation(key, **kwargs)
-            
-        except Exception as e:
-            _LOGGER.debug(f"Translation error for key '{key}': {e}")
+        language = self.hass.config.language if self.hass else 'en'
+        _LOGGER.debug(f"Detected language: {language} for key: {key}")
+        
+        if language == 'pl':
+            return self._get_polish_translation(key, **kwargs)
+        else:
             return self._get_fallback_translation(key, **kwargs)
+
+    def _get_polish_translation(self, key: str, **kwargs) -> str:
+        """Polish translations hardcoded."""
+        polish_translations = {
+            # PlateRecognitionCameraSensor
+            'state.sensor.plate_recognition_camera.waiting_api': 'Oczekiwanie na API',
+            'state.sensor.plate_recognition_camera.no_plates': 'Nie wykryto tablic',
+            'state.sensor.plate_recognition_camera.vehicle_no_plate': 'Wykryto pojazd bez tablicy',
+            'state.sensor.plate_recognition_camera.camera_unavailable': 'Kamera niedostępna',
+            
+            # RecognizedCarSensor
+            'state.sensor.recognized_car.no_plates': 'Nie wykryto tablic',
+            'state.sensor.recognized_car.recognized': 'Rozpoznano: {plates}',
+            'state.sensor.recognized_car.not_recognized': 'Nie rozpoznano: {plates}',
+            
+            # LastRecognizedCarSensor
+            'state.sensor.last_recognized_car.no_recognized': 'Brak rozpoznanych tablic',
+            
+            # FormattedCarPlatesSensor
+            'state.sensor.formatted_car_plates.known_plates': 'Znane tablice rejestracyjne',
+            'state.sensor.formatted_car_plates.known_plates_count': 'Znane tablice rejestracyjne ({count})',
+            'state.sensor.formatted_car_plates.no_known_plates': 'Brak znanych tablic',
+            'state.sensor.formatted_car_plates.manager_unavailable': 'PlateManager nie dostępny',
+        }
+        
+        result = polish_translations.get(key, self._get_fallback_translation(key, **kwargs))
+        if kwargs:
+            try:
+                result = result.format(**kwargs)
+            except:
+                pass
+        return result
+
 
     def _get_fallback_translation(self, key: str, **kwargs) -> str:
         """Fallback translations when translation system fails."""
@@ -346,32 +374,45 @@ class LastRecognizedCarSensor(RestoreEntity, SensorEntity):
 
     def _get_translation(self, key: str, **kwargs) -> str:
         """Get translated text based on current language setting."""
-        try:
-            language = self.hass.config.language if self.hass else 'en'
-            if language != 'pl':
-                language = 'en'
-            
-            # Try to get translations from hass.data or fallback to hardcoded
-            translations = self.hass.data.get(DOMAIN, {}).get('translations', {}).get(language, {})
-            
-            # Navigate through translation structure
-            keys = key.split('.')
-            current = translations
-            for k in keys:
-                if isinstance(current, dict) and k in current:
-                    current = current[k]
-                else:
-                    # Fallback to English hardcoded values
-                    return self._get_fallback_translation(key, **kwargs)
-            
-            # Format with provided kwargs if it's a string
-            if isinstance(current, str) and kwargs:
-                return current.format(**kwargs)
-            return current if isinstance(current, str) else self._get_fallback_translation(key, **kwargs)
-            
-        except Exception as e:
-            _LOGGER.debug(f"Translation error for key '{key}': {e}")
+        language = self.hass.config.language if self.hass else 'en'
+        _LOGGER.debug(f"Detected language: {language} for key: {key}")
+        
+        if language == 'pl':
+            return self._get_polish_translation(key, **kwargs)
+        else:
             return self._get_fallback_translation(key, **kwargs)
+
+    def _get_polish_translation(self, key: str, **kwargs) -> str:
+        """Polish translations hardcoded."""
+        polish_translations = {
+            # PlateRecognitionCameraSensor
+            'state.sensor.plate_recognition_camera.waiting_api': 'Oczekiwanie na API',
+            'state.sensor.plate_recognition_camera.no_plates': 'Nie wykryto tablic',
+            'state.sensor.plate_recognition_camera.vehicle_no_plate': 'Wykryto pojazd bez tablicy',
+            'state.sensor.plate_recognition_camera.camera_unavailable': 'Kamera niedostępna',
+            
+            # RecognizedCarSensor
+            'state.sensor.recognized_car.no_plates': 'Nie wykryto tablic',
+            'state.sensor.recognized_car.recognized': 'Rozpoznano: {plates}',
+            'state.sensor.recognized_car.not_recognized': 'Nie rozpoznano: {plates}',
+            
+            # LastRecognizedCarSensor
+            'state.sensor.last_recognized_car.no_recognized': 'Brak rozpoznanych tablic',
+            
+            # FormattedCarPlatesSensor
+            'state.sensor.formatted_car_plates.known_plates': 'Znane tablice rejestracyjne',
+            'state.sensor.formatted_car_plates.known_plates_count': 'Znane tablice rejestracyjne ({count})',
+            'state.sensor.formatted_car_plates.no_known_plates': 'Brak znanych tablic',
+            'state.sensor.formatted_car_plates.manager_unavailable': 'PlateManager nie dostępny',
+        }
+        
+        result = polish_translations.get(key, self._get_fallback_translation(key, **kwargs))
+        if kwargs:
+            try:
+                result = result.format(**kwargs)
+            except:
+                pass
+        return result
 
     def _get_fallback_translation(self, key: str, **kwargs) -> str:
         """Fallback translations when translation system fails."""
@@ -457,32 +498,45 @@ class RecognizedCarSensor(SensorEntity):
 
     def _get_translation(self, key: str, **kwargs) -> str:
         """Get translated text based on current language setting."""
-        try:
-            language = self.hass.config.language if self.hass else 'en'
-            if language != 'pl':
-                language = 'en'
-            
-            # Try to get translations from hass.data or fallback to hardcoded
-            translations = self.hass.data.get(DOMAIN, {}).get('translations', {}).get(language, {})
-            
-            # Navigate through translation structure
-            keys = key.split('.')
-            current = translations
-            for k in keys:
-                if isinstance(current, dict) and k in current:
-                    current = current[k]
-                else:
-                    # Fallback to English hardcoded values
-                    return self._get_fallback_translation(key, **kwargs)
-            
-            # Format with provided kwargs if it's a string
-            if isinstance(current, str) and kwargs:
-                return current.format(**kwargs)
-            return current if isinstance(current, str) else self._get_fallback_translation(key, **kwargs)
-            
-        except Exception as e:
-            _LOGGER.debug(f"Translation error for key '{key}': {e}")
+        language = self.hass.config.language if self.hass else 'en'
+        _LOGGER.debug(f"Detected language: {language} for key: {key}")
+        
+        if language == 'pl':
+            return self._get_polish_translation(key, **kwargs)
+        else:
             return self._get_fallback_translation(key, **kwargs)
+
+    def _get_polish_translation(self, key: str, **kwargs) -> str:
+        """Polish translations hardcoded."""
+        polish_translations = {
+            # PlateRecognitionCameraSensor
+            'state.sensor.plate_recognition_camera.waiting_api': 'Oczekiwanie na API',
+            'state.sensor.plate_recognition_camera.no_plates': 'Nie wykryto tablic',
+            'state.sensor.plate_recognition_camera.vehicle_no_plate': 'Wykryto pojazd bez tablicy',
+            'state.sensor.plate_recognition_camera.camera_unavailable': 'Kamera niedostępna',
+            
+            # RecognizedCarSensor
+            'state.sensor.recognized_car.no_plates': 'Nie wykryto tablic',
+            'state.sensor.recognized_car.recognized': 'Rozpoznano: {plates}',
+            'state.sensor.recognized_car.not_recognized': 'Nie rozpoznano: {plates}',
+            
+            # LastRecognizedCarSensor
+            'state.sensor.last_recognized_car.no_recognized': 'Brak rozpoznanych tablic',
+            
+            # FormattedCarPlatesSensor
+            'state.sensor.formatted_car_plates.known_plates': 'Znane tablice rejestracyjne',
+            'state.sensor.formatted_car_plates.known_plates_count': 'Znane tablice rejestracyjne ({count})',
+            'state.sensor.formatted_car_plates.no_known_plates': 'Brak znanych tablic',
+            'state.sensor.formatted_car_plates.manager_unavailable': 'PlateManager nie dostępny',
+        }
+        
+        result = polish_translations.get(key, self._get_fallback_translation(key, **kwargs))
+        if kwargs:
+            try:
+                result = result.format(**kwargs)
+            except:
+                pass
+        return result
 
     def _get_fallback_translation(self, key: str, **kwargs) -> str:
         """Fallback translations when translation system fails."""

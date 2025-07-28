@@ -33,32 +33,28 @@ class PlateManager:
 
     def _get_translation(self, key: str, **kwargs) -> str:
         """Get translated text based on current language setting."""
-        try:
-            language = self.hass.config.language if self.hass else 'en'
-            if language != 'pl':
-                language = 'en'
-            
-            # Try to get translations from hass.data or fallback to hardcoded
-            translations = self.hass.data.get(DOMAIN, {}).get('translations', {}).get(language, {})
-            
-            # Navigate through translation structure
-            keys = key.split('.')
-            current = translations
-            for k in keys:
-                if isinstance(current, dict) and k in current:
-                    current = current[k]
-                else:
-                    # Fallback to English hardcoded values
-                    return self._get_fallback_translation(key, **kwargs)
-            
-            # Format with provided kwargs if it's a string
-            if isinstance(current, str) and kwargs:
-                return current.format(**kwargs)
-            return current if isinstance(current, str) else self._get_fallback_translation(key, **kwargs)
-            
-        except Exception as e:
-            _LOGGER.debug(f"Translation error for key '{key}': {e}")
+        language = self.hass.config.language if self.hass else 'en'
+        _LOGGER.debug(f"PlateManager detected language: {language} for key: {key}")
+        
+        if language == 'pl':
+            return self._get_polish_translation(key, **kwargs)
+        else:
             return self._get_fallback_translation(key, **kwargs)
+
+    def _get_polish_translation(self, key: str, **kwargs) -> str:
+        """Polish translations hardcoded."""
+        polish_translations = {
+            'component.enhanced_platerecognizer.plate_manager.no_plates': 'Brak tablic',
+            'component.enhanced_platerecognizer.plate_manager.select_to_delete': 'Wybierz tablice do usunięcia',
+        }
+        
+        result = polish_translations.get(key, self._get_fallback_translation(key, **kwargs))
+        if kwargs:
+            try:
+                result = result.format(**kwargs)
+            except:
+                pass
+        return result
 
     def _get_fallback_translation(self, key: str, **kwargs) -> str:
         """Fallback translations when translation system fails."""
