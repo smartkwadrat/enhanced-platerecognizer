@@ -20,11 +20,11 @@
 | Multiple camera support           | ✔️                           | ✔️                           |
 | Save images with overlays         | ✔️ limited                   | ✔️ with timestamp/latest, ROI, owner |
 | API statistics sensor             | ❌                           | ✔️                           |
-| Multi-language: Polish & English  | ❌                           | ✔️ (PL and EN) |
-| Dashboard cards                   | ❌                           | ✔️ Full add/remove plate UI  |
+| Multi-language                    | ❌                           | ✔️ (PL and EN) |
+| Dashboard cards                   | ❌                           | ✔️                           |
 | Tolerate single OCR mistake       | ❌                           | ✔️                           |
-| Plates managmenet over dashboard  | ❌                 | ✔️                           |
-| Save plate–owner pairs            | ❌                           | ✔️ (`plates.yaml`)           |
+| Plates managmenet over dashboard  | ❌                           | ✔️                           |
+| Save plate–owner pairs            | ❌                           | ✔️                           |
 | Multiple camera dashboard out-of-the-box | ❌                  | ✔️                           |
 | Consecutive captures with delay   | ❌                           | ✔️ (option for increased reliability) |
 | Home Assistant event-based sensors | ❌                        | ✔️                           |
@@ -59,38 +59,41 @@ Add the following to your `configuration.yaml` (adapt paths/entities/api_token a
 
 ```yaml
 image_processing:
-platform: enhanced_platerecognizer
-api_token: your_api_token_here
-regions: pl
-save_file_folder: /media/image/platerecognizer
-save_timestamped_file: true
-always_save_latest_file: true
-detection_rule: none
-mmc: false
-region: none
-server: https://api.platerecognizer.com/v1/plate-reader/
-consecutive_captures: false
-tolerate_one_mistake: true
-source:
-entity_id: camera.camera1_snapshots_clear
-entity_id: camera.camera2_snapshots_clear
+  - platform: enhanced_platerecognizer
+    api_token: your_api_token_here
+    regions:
+      - pl
+      - gb
+      - ie
+    save_file_folder: /media/image/platerecognizer
+    save_timestamped_file: true
+    always_save_latest_file: true
+    detection_rule: none
+    mmc: false
+    region: none
+    server: https://api.platerecognizer.com/v1/plate-reader/
+    consecutive_captures: false
+    tolerate_one_mistake: true
+    source:
+      - entity_id: camera.camera1_snapshots_clear
+      - entity_id: camera.camera2_snapshots_clear
 
 input_text:
-add_new_plate:
-name: Add New Plate
-min: 0
-max: 255
+  add_new_plate:
+  name: Add New Plate
+  min: 0
+  max: 255
 
 add_plate_owner:
-name: Add Plate Owner
-min: 0
-max: 255
+  name: Add Plate Owner
+  min: 0
+  max: 255
 
 input_select:
-remove_plate:
-name: Remove plate
-options:
-- "Select plates to remove"
+  remove_plate:
+    name: Remove plate
+    options:
+      - "Select plates to remove"
 ```
 
 
@@ -98,44 +101,53 @@ options:
 ## 🖥️ Example Minimal Dashboard (Lovelace YAML)
 
 ```yaml
-type: entity
-name: Last recognized plates
-entity: sensor.last_recognized_car
-style: "--primary-font-size: 10px"
+title: License Plate Recognition
+cards:
+  - type: vertical-stack
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            name: Last Recognized Plate
+            entity: sensor.last_recognized_plate
+            style:
+              "--primary-font-size": 10px
+          - type: entity
+            name: Currently Recognized Plate(s)
+            entity: sensor.current_recognized_plates
+      - type: entity
+        entity: sensor.plate_recognition_camera_1
+        name: Camera 1 Plate Status
+      - type: entity
+        entity: sensor.plate_recognition_camera_2
+        name: Camera 2 Plate Status
+      - type: markdown
+        content: >
+          ## Vehicle Just Detected
 
-type: entity
-name: Recognized plates
-entity: sensor.recognized_car
-
-type: entity
-entity: sensor.plate_recognition_camera_1
-
-type: entity
-entity: sensor.plate_recognition_camera_2
-
-type: markdown
-content: >
-The car that just arrived
-<span style="font-size: 1.5em;"> {% if states('sensor.recognized_car') %} {{ states('sensor.recognized_car') }} {% else %} No plates recognized {% endif %} </span>
-type: entities
-title: Plates management
-entities:
-
-entity: input_text.add_plate_owner
-name: Add plates owner
-
-entity: input_text.add_new_plate
-name: Add new license plates
-
-entity: input_select.remove_plate
-name: Remove plates
-
-type: markdown
-content: >-
-{{ state_attr('sensor.formatted_car_plates', 'formatted_list') | safe }}
-title: Recorded license plates
+          <span style="font-size: 1.5em;">
+          {% if states('sensor.current_recognized_plates') %}
+            {{ states('sensor.current_recognized_plates') }}
+          {% else %}
+            No plates recognized.
+          {% endif %}
+          </span>
+      - type: entities
+        title: Manage Known Plates
+        entities:
+          - entity: input_text.add_plate_owner
+            name: Enter Plate Owner
+          - entity: input_text.add_new_plate
+            name: Add New License Plate
+          - entity: input_select.remove_plate
+            name: Remove Plate
+      - type: markdown
+        title: Saved Plates List
+        content: >-
+          {{ state_attr('sensor.known_license_plates', 'formatted_list') | safe }}
 type: custom:vertical-layout
 ```
+
 
 ## ⚡ Example Automations
 
