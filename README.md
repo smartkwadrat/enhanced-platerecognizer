@@ -20,18 +20,13 @@
 | Multiple camera support           | ✔️                           | ✔️                           |
 | Save images with overlays         | ✔️ limited                   | ✔️ with timestamp/latest, ROI, owner |
 | API statistics sensor             | ❌                           | ✔️                           |
-| Multi-language: Polish & English  | ❌                           | ✔️ (auto, translation system with 🇵🇱 hardcode) |
-| Dashboard helpers (input_text, select) | ❌                     | ✔️ Full add/remove plate UI  |
+| Multi-language: Polish & English  | ❌                           | ✔️ (PL and EN) |
+| Dashboard cards                   | ❌                           | ✔️ Full add/remove plate UI  |
 | Tolerate single OCR mistake       | ❌                           | ✔️                           |
-| Manual add/remove plates (input_text/select) | ❌                 | ✔️                           |
-| Special sensors (last recognized, recognized, formatted) | ❌     | ✔️ (`sensor.last_recognized_car`, `sensor.recognized_car`, `sensor.formatted_car_plates`) |
-| Events after plate/vehicle detection | ❌                      | ✔️ (`enhanced_platerecognizer_image_processed`, `enhanced_platerecognizer_plate_added`, `enhanced_platerecognizer_plate_removed`) |
-| Custom per-country detection      | ✔️ limited                   | ✔️ Add new regions easily   |
-| Configurable detection rules/API server | ❌                    | ✔️ (`detection_rule`, `server`)      |
+| Plates managmenet over dashboard  | ❌                 | ✔️                           |
 | Save plate–owner pairs            | ❌                           | ✔️ (`plates.yaml`)           |
 | Multiple camera dashboard out-of-the-box | ❌                  | ✔️                           |
 | Consecutive captures with delay   | ❌                           | ✔️ (option for increased reliability) |
-| Polish helper entity names/UX/hints | ❌                        | ✔️                           |
 | Home Assistant event-based sensors | ❌                        | ✔️                           |
 
 ---
@@ -48,11 +43,15 @@
 
 ## 🛠️ Installation
 
-1. **Download** this repository and manually copy into your Home Assistant `custom_components/enhanced_platerecognizer` directory.
-2. **Restart** Home Assistant.
-3. **Set up configuration** as below.
+### Via HACS (Recommended)
 
----
+1. Install HACS (Home Assistant Community Store) if you haven't already.
+2. In Home Assistant Community Store click the `...` button on the top-right correnr.
+3. Add custom repository URL: https://github.com/smartkwadrat/enhanced-platerecognizer
+4. Search for enhanced-platerecognizer and click **Download**.
+5. Restart Home Assistant.
+6. Add new settings to configuration.yaml
+
 
 ## ⚙️ Example Configuration (`configuration.yaml`)
 
@@ -73,8 +72,8 @@ server: https://api.platerecognizer.com/v1/plate-reader/
 consecutive_captures: false
 tolerate_one_mistake: true
 source:
-entity_id: camera.brama_snapshots_clear
-entity_id: camera.droga_snapshots_clear_2
+entity_id: camera.camera1_snapshots_clear
+entity_id: camera.camera2_snapshots_clear
 
 input_text:
 add_new_plate:
