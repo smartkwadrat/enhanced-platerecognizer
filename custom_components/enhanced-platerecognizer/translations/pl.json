@@ -1,0 +1,34 @@
+{
+  "state": {
+    "sensor": {
+      "plate_recognition_camera": {
+        "waiting_api": "Oczekiwanie na API",
+        "no_plates": "Nie wykryto tablic",
+        "vehicle_no_plate": "Wykryto pojazd bez tablicy",
+        "camera_unavailable": "Kamera niedostępna"
+      },
+      "recognized_car": {
+        "no_plates": "Nie wykryto tablic",
+        "recognized": "Rozpoznano: {plates}",
+        "not_recognized": "Nie rozpoznano: {plates}"
+      },
+      "last_recognized_car": {
+        "no_recognized": "Brak rozpoznanych tablic"
+      },
+      "formatted_car_plates": {
+        "known_plates": "Znane tablice rejestracyjne",
+        "known_plates_count": "Znane tablice rejestracyjne ({count})",
+        "no_known_plates": "Brak znanych tablic",
+        "manager_unavailable": "PlateManager nie dostępny"
+      }
+    }
+  },
+  "component": {
+    "enhanced_platerecognizer": {
+      "plate_manager": {
+        "no_plates": "Brak tablic",
+        "select_to_delete": "Wybierz tablice do usunięcia"
+      }
+    }
+  }
+}

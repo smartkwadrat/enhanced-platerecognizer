@@ -1,4 +1,5 @@
 """Vehicle detection using Plate Recognizer cloud service."""
+
 import logging
 import requests
 import voluptuous as vol
@@ -7,8 +8,8 @@ import io
 from typing import List, Dict
 import json
 import asyncio
-from homeassistant.core import HomeAssistant
 
+from homeassistant.core import HomeAssistant
 from PIL import Image, ImageDraw, UnidentifiedImageError
 from pathlib import Path
 import os
@@ -29,8 +30,8 @@ from datetime import datetime
 
 _LOGGER = logging.getLogger(__name__)
 
-REPEATS = 3      # liczba dodatkowych skanów
-DELAY   = 1.2    # bazowe opóźnienie w sekundach
+REPEATS = 3  # Number of additional scans
+DELAY = 1.2  # Base delay in seconds
 
 PLATE_READER_URL = "https://api.platerecognizer.com/v1/plate-reader/"
 STATS_URL = "https://api.platerecognizer.com/v1/statistics/"
@@ -57,37 +58,40 @@ CONF_DETECTION_RULE = "detection_rule"
 CONF_REGION_STRICT = "region"
 
 DATETIME_FORMAT = "%Y-%m-%d_%H-%M-%S"
+
 RED = (255, 0, 0)  # For objects within the ROI
+
 DEFAULT_REGIONS = ['None']
 
 CONF_CONSECUTIVE_CAPTURES = "consecutive_captures"
 CONF_TOLERATE_ONE_MISTAKE = "tolerate_one_mistake"
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_API_TOKEN): cv.string,
-        vol.Optional(CONF_REGIONS, default=DEFAULT_REGIONS): vol.All(
-            cv.ensure_list, [cv.string]
-        ),
-        vol.Optional(CONF_MMC, default=False): cv.boolean,
-        vol.Optional(CONF_SAVE_FILE_FOLDER): cv.isdir,
-        vol.Optional(CONF_SAVE_TIMESTAMPTED_FILE, default=False): cv.boolean,
-        vol.Optional(CONF_ALWAYS_SAVE_LATEST_FILE, default=False): cv.boolean,
-        vol.Optional(CONF_WATCHED_PLATES): vol.All(
-            cv.ensure_list, [cv.string]
-        ),
-        vol.Optional(CONF_SERVER, default=PLATE_READER_URL): cv.string,
-        vol.Optional(CONF_DETECTION_RULE, default=False): cv.string,
-        vol.Optional(CONF_REGION_STRICT, default=False): cv.string,
-        vol.Optional(CONF_CONSECUTIVE_CAPTURES, default=False): cv.boolean,
-        vol.Optional(CONF_TOLERATE_ONE_MISTAKE, default=True): cv.boolean,
-    }
-)
+DOMAIN = "enhanced_platerecognizer"
 
-def get_plates(results : List[Dict]) -> List[str]:
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
+    vol.Required(CONF_API_TOKEN): cv.string,
+    vol.Optional(CONF_REGIONS, default=DEFAULT_REGIONS): vol.All(
+        cv.ensure_list, [cv.string]
+    ),
+    vol.Optional(CONF_MMC, default=False): cv.boolean,
+    vol.Optional(CONF_SAVE_FILE_FOLDER): cv.isdir,
+    vol.Optional(CONF_SAVE_TIMESTAMPTED_FILE, default=False): cv.boolean,
+    vol.Optional(CONF_ALWAYS_SAVE_LATEST_FILE, default=False): cv.boolean,
+    vol.Optional(CONF_WATCHED_PLATES): vol.All(
+        cv.ensure_list, [cv.string]
+    ),
+    vol.Optional(CONF_SERVER, default=PLATE_READER_URL): cv.string,
+    vol.Optional(CONF_DETECTION_RULE, default=False): cv.string,
+    vol.Optional(CONF_REGION_STRICT, default=False): cv.string,
+    vol.Optional(CONF_CONSECUTIVE_CAPTURES, default=False): cv.boolean,
+    vol.Optional(CONF_TOLERATE_ONE_MISTAKE, default=True): cv.boolean,
+})
+
+
+def get_plates(results: List[Dict]) -> List[str]:
     """
-    Return the list of candidate plates. 
-    If no plates empty list returned.
+    Return the list of candidate plates.
+    If no plates found, return empty list.
     """
     plates = []
     candidates = [result['candidates'] for result in results]
@@ -97,10 +101,11 @@ def get_plates(results : List[Dict]) -> List[str]:
             plates.append(plate)
     return list(set(plates))
 
-def get_orientations(results : List[Dict]) -> List[str]:
+
+def get_orientations(results: List[Dict]) -> List[str]:
     """
-    Return the list of candidate orientations. 
-    If no orientations empty list returned.
+    Return the list of candidate orientations.
+    If no orientations found, return empty list.
     """
     try:
         orientations = []
@@ -114,38 +119,39 @@ def get_orientations(results : List[Dict]) -> List[str]:
     except Exception as exc:
         _LOGGER.error("get_orientations error: %s", exc)
 
+
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the platform."""
     save_folder = config.get("save_file_folder")
-    # 1) Sprawdź najpierw, czy ścieżka jest na liście dozwolonych:
+    
+    # 1) First check if the path is in the allowlist
     if save_folder and not hass.config.is_allowed_path(save_folder):
         _LOGGER.error(
-            "Ścieżka %r nie jest dozwolona w allowlist_external_dirs – pomijam zapisywanie plików",
+            "Path %r is not allowed in allowlist_external_dirs - skipping file saving",
             save_folder,
         )
         save_folder = None
 
-    # 2) Jeżeli ścieżka jest OK, utwórz katalog
+    # 2) If path is OK, create directory
     if save_folder:
         try:
             Path(save_folder).mkdir(parents=True, exist_ok=True)
             os.chmod(save_folder, 0o755)
         except Exception as e:
-            _LOGGER.error("Nie udało się utworzyć folderu %r: %s", save_folder, e)
+            _LOGGER.error("Failed to create folder %r: %s", save_folder, e)
             save_folder = None
-            
-    # Przekaż tolerate_one_mistake do hass.data
+
+    # Pass tolerate_one_mistake to hass.data
     domain = "enhanced_platerecognizer"
     if domain not in hass.data:
         hass.data[domain] = {}
-    
     hass.data[domain]["tolerate_one_mistake"] = config.get(CONF_TOLERATE_ONE_MISTAKE, True)
 
     entities = []
     for camera in config[CONF_SOURCE]:
         platerecognizer = PlateRecognizerEntity(
             api_token=config.get(CONF_API_TOKEN),
-            regions = config.get(CONF_REGIONS),
+            regions=config.get(CONF_REGIONS),
             save_file_folder=save_folder,
             save_timestamped_file=config.get(CONF_SAVE_TIMESTAMPTED_FILE),
             always_save_latest_file=config.get(CONF_ALWAYS_SAVE_LATEST_FILE),
@@ -154,12 +160,13 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
             name=camera.get(CONF_NAME),
             mmc=config.get(CONF_MMC),
             server=config.get(CONF_SERVER),
-            detection_rule = config.get(CONF_DETECTION_RULE),
-            region_strict = config.get(CONF_REGION_STRICT),
+            detection_rule=config.get(CONF_DETECTION_RULE),
+            region_strict=config.get(CONF_REGION_STRICT),
             consecutive_captures=config.get(CONF_CONSECUTIVE_CAPTURES, False),
-
+            hass=hass,
         )
         entities.append(platerecognizer)
+
     add_entities(entities)
 
 
@@ -181,16 +188,20 @@ class PlateRecognizerEntity(ImageProcessingEntity):
         detection_rule,
         region_strict,
         consecutive_captures=False,
+        hass=None,
     ):
-        """Init."""
+        """Initialize the entity."""
         self._headers = {"Authorization": f"Token {api_token}"}
         self._regions = regions
         self._camera = camera_entity
+        self.hass = hass
+        
         if name:
             self._name = name
         else:
             camera_name = split_entity_id(camera_entity)[1]
             self._name = f"platerecognizer_{camera_name}"
+
         self._save_file_folder = Path(save_file_folder) if save_file_folder else None
         self._save_timestamped_file = save_timestamped_file
         self._always_save_latest_file = always_save_latest_file
@@ -210,46 +221,99 @@ class PlateRecognizerEntity(ImageProcessingEntity):
         self._image_height = None
         self._image = None
         self._config = {}
+        
         self.get_statistics()
         self._consecutive_captures = consecutive_captures
         self._processing_additional_captures = False
         self._current_capture_count = 0
 
-    def process_image(self, image):
-        """Przetwarza obraz, obsługuje błędy i ZAWSZE wysyła zdarzenie."""
-        self._current_capture_count += 1
+    def _get_translation(self, key: str, **kwargs) -> str:
+        """Get translated text based on current language setting."""
+        try:
+            language = self.hass.config.language if self.hass else 'en'
+            if language != 'pl':
+                language = 'en'
+            
+            # Try to get translations from hass.data or fallback to hardcoded
+            translations = self.hass.data.get(DOMAIN, {}).get('translations', {}).get(language, {})
+            
+            # Navigate through translation structure
+            keys = key.split('.')
+            current = translations
+            for k in keys:
+                if isinstance(current, dict) and k in current:
+                    current = current[k]
+                else:
+                    # Fallback to English hardcoded values
+                    return self._get_fallback_translation(key, **kwargs)
+            
+            # Format with provided kwargs if it's a string
+            if isinstance(current, str) and kwargs:
+                return current.format(**kwargs)
+            return current if isinstance(current, str) else self._get_fallback_translation(key, **kwargs)
+            
+        except Exception as e:
+            _LOGGER.debug(f"Translation error for key '{key}': {e}")
+            return self._get_fallback_translation(key, **kwargs)
+
+    def _get_fallback_translation(self, key: str, **kwargs) -> str:
+        """Fallback translations when translation system fails."""
+        fallbacks = {
+            'state.sensor.plate_recognition_camera.waiting_api': 'Waiting for API',
+            'state.sensor.plate_recognition_camera.no_plates': 'No plates detected',
+            'state.sensor.plate_recognition_camera.vehicle_no_plate': 'Vehicle detected without plate',
+            'state.sensor.plate_recognition_camera.camera_unavailable': 'Camera unavailable',
+            'processing.image_error': 'Image error',
+            'processing.api_error': 'API error',
+            'processing.processing_error': 'Processing error',
+        }
         
-        # Resetowanie stanów na początku
+        result = fallbacks.get(key, key)
+        if kwargs:
+            try:
+                result = result.format(**kwargs)
+            except:
+                pass
+        return result
+
+    def process_image(self, image):
+        """Process image, handle errors and ALWAYS send event."""
+        self._current_capture_count += 1
+
+        # Reset states at the beginning
         self._state = None
         self._results = {}
-        self._vehicles = [] # ZMIANA: Inicjalizujemy jako pustą listę, a nie listę z pustym słownikiem
+        self._vehicles = []  # CHANGE: Initialize as empty list, not list with empty dict
         self._plates = []
         self._orientations = []
-        
+
         try:
             self._image = Image.open(io.BytesIO(bytearray(image)))
             self._image_width, self._image_height = self._image.size
         except UnidentifiedImageError:
-            _LOGGER.error("Nie udało się otworzyć obrazu. Może być uszkodzony.")
-            self._state = "Błąd obrazu"
-            # Mimo błędu, wysyłamy zdarzenie - to jest KLUCZOWA ZMIANA
+            _LOGGER.error("Failed to open image. It may be corrupted.")
+            self._state = self._get_translation('processing.image_error')
+            
+            # Despite error, send event - this is a KEY CHANGE
             self.hass.bus.fire('enhanced_platerecognizer_image_processed', {
                 'entity_id': self.entity_id,
                 'has_vehicles': False,
                 'vehicles': [],
                 'timestamp': dt_util.now().strftime(DATETIME_FORMAT)
             })
-            return # Kończymy działanie tej metody
+            return  # End execution of this method
 
         if self._regions == DEFAULT_REGIONS:
             regions = None
         else:
             regions = self._regions
+
         if self._detection_rule:
             self._config.update({"detection_rule": self._detection_rule})
+
         if self._region_strict:
             self._config.update({"region": self._region_strict})
-        
+
         try:
             _LOGGER.debug("Config: " + str(json.dumps(self._config)))
             response = requests.post(
@@ -257,15 +321,16 @@ class PlateRecognizerEntity(ImageProcessingEntity):
                 data=dict(regions=regions, camera_id=self.name, mmc=self._mmc, config=json.dumps(self._config)),
                 files={"upload": image},
                 headers=self._headers,
-                timeout=10 # Dobrą praktyką jest dodanie timeoutu
+                timeout=10  # Good practice to add timeout
             ).json()
-            
+
             self._results = response.get("results", [])
             self._plates = get_plates(self._results)
+
             if self._mmc:
                 self._orientations = get_orientations(self._results)
-            
-            # Uproszczona i bardziej niezawodna logika tworzenia listy pojazdów
+
+            # Simplified and more reliable vehicle list creation logic
             self._vehicles = [
                 {
                     ATTR_PLATE: r["plate"],
@@ -279,26 +344,26 @@ class PlateRecognizerEntity(ImageProcessingEntity):
             ]
 
         except requests.RequestException as exc:
-            _LOGGER.error("Błąd połączenia z API Plate Recognizer: %s", exc)
-            self._state = "Błąd API"
+            _LOGGER.error("Connection error with Plate Recognizer API: %s", exc)
+            self._state = self._get_translation('processing.api_error')
             self._vehicles = []
         except Exception as exc:
-            _LOGGER.error("Nieoczekiwany błąd podczas przetwarzania w Plate Recognizer: %s", exc)
-            self._state = "Błąd przetwarzania"
+            _LOGGER.error("Unexpected error during Plate Recognizer processing: %s", exc)
+            self._state = self._get_translation('processing.processing_error')
             self._vehicles = []
 
         current_time = dt_util.now().strftime(DATETIME_FORMAT)
-        
+
         if self._vehicles:
             self._last_detection = current_time
-            # Używamy _plates, bo self._vehicles zawiera teraz więcej danych
+            # We use _plates because self._vehicles now contains more data
             self._state = ", ".join(self._plates)
-        elif self._state is None: # Jeśli nie było błędu, ale nie ma pojazdów
+        elif self._state is None:  # If there was no error but no vehicles
             self._state = f"no_vehicles_{current_time}"
 
-        _LOGGER.info(f"Wysyłanie eventu 'enhanced_platerecognizer_image_processed' dla {self.entity_id}")
+        _LOGGER.info(f"Sending 'enhanced_platerecognizer_image_processed' event for {self.entity_id}")
         _LOGGER.debug(f"Event data: entity_id={self.entity_id}, has_vehicles={bool(self._vehicles)}, vehicles_count={len(self._vehicles)}")
-        _LOGGER.info(f"Przygotowywanie zdarzenia dla {self.entity_id} z danymi: has_vehicles={bool(self._vehicles)}")
+        _LOGGER.info(f"Preparing event for {self.entity_id} with data: has_vehicles={bool(self._vehicles)}")
 
         self.hass.bus.fire('enhanced_platerecognizer_image_processed', {
             'entity_id': self.entity_id,
@@ -310,7 +375,7 @@ class PlateRecognizerEntity(ImageProcessingEntity):
         if self._save_file_folder:
             if self._vehicles or self._always_save_latest_file:
                 self.save_image()
-        
+
         if self._server == PLATE_READER_URL:
             self.get_statistics()
         elif "usage" in response:
@@ -318,28 +383,30 @@ class PlateRecognizerEntity(ImageProcessingEntity):
             calls_remaining = stats.get("max_calls", 0) - stats.get("calls", 0)
             stats.update({"calls_remaining": calls_remaining})
             self._statistics = stats
-        
+
         if self._consecutive_captures and self._current_capture_count == 1:
             for i in range(1, REPEATS + 1):
                 self.hass.create_task(self._schedule_next_scan(DELAY * i))
-                
+
         if self._current_capture_count >= REPEATS + 1:
             self._current_capture_count = 0
 
     async def _schedule_next_scan(self, delay):
-        """Zaplanuj następne skanowanie po określonym opóźnieniu."""
+        """Schedule next scan after specified delay."""
         await asyncio.sleep(delay)
         await self.hass.services.async_call(
-            "image_processing", 
-            "scan", 
+            "image_processing",
+            "scan",
             {"entity_id": self.entity_id}
         )
-        # Reset flagi po ostatnim skanowaniu
+
+        # Reset flag after last scan
         if self._current_capture_count >= 3:
             self._current_capture_count = 0
             self._processing_additional_captures = False
 
     def get_statistics(self):
+        """Get API usage statistics."""
         try:
             response = requests.get(STATS_URL, headers=self._headers).json()
             calls_remaining = response["total_calls"] - response["usage"]["calls"]
@@ -357,14 +424,14 @@ class PlateRecognizerEntity(ImageProcessingEntity):
     def save_image(self):
         """Save a timestamped image with bounding boxes around plates."""
         draw = ImageDraw.Draw(self._image)
-
         decimal_places = 3
+
         for vehicle in self._results:
             box = (
-                    round(vehicle['box']["ymin"] / self._image_height, decimal_places),
-                    round(vehicle['box']["xmin"] / self._image_width, decimal_places),
-                    round(vehicle['box']["ymax"] / self._image_height, decimal_places),
-                    round(vehicle['box']["xmax"] / self._image_width, decimal_places),
+                round(vehicle['box']["ymin"] / self._image_height, decimal_places),
+                round(vehicle['box']["xmin"] / self._image_width, decimal_places),
+                round(vehicle['box']["ymax"] / self._image_height, decimal_places),
+                round(vehicle['box']["xmax"] / self._image_width, decimal_places),
             )
             text = vehicle['plate']
             draw_box(
@@ -374,7 +441,7 @@ class PlateRecognizerEntity(ImageProcessingEntity):
                 self._image_height,
                 text=text,
                 color=RED,
-                )
+            )
 
         latest_save_path = self._save_file_folder / f"{self._name}_latest.png"
         self._image.save(latest_save_path)
@@ -416,19 +483,26 @@ class PlateRecognizerEntity(ImageProcessingEntity):
         attr.update({"last_detection": self._last_detection})
         attr.update({"vehicles": self._vehicles})
         attr.update({ATTR_ORIENTATION: self._orientations})
+
         if self._watched_plates:
-            watched_plates_results = {plate : False for plate in self._watched_plates}
+            watched_plates_results = {plate: False for plate in self._watched_plates}
             for plate in self._watched_plates:
                 if plate in self._plates:
                     watched_plates_results.update({plate: True})
             attr[CONF_WATCHED_PLATES] = watched_plates_results
+
         attr.update({"statistics": self._statistics})
+
         if self._regions != DEFAULT_REGIONS:
             attr[CONF_REGIONS] = self._regions
+
         if self._server != PLATE_READER_URL:
             attr[CONF_SERVER] = str(self._server)
+
         if self._save_file_folder:
             attr[CONF_SAVE_FILE_FOLDER] = str(self._save_file_folder)
-            attr[CONF_SAVE_TIMESTAMPTED_FILE] = self._save_timestamped_file
-            attr[CONF_ALWAYS_SAVE_LATEST_FILE] = self._always_save_latest_file
+
+        attr[CONF_SAVE_TIMESTAMPTED_FILE] = self._save_timestamped_file
+        attr[CONF_ALWAYS_SAVE_LATEST_FILE] = self._always_save_latest_file
+
         return attr

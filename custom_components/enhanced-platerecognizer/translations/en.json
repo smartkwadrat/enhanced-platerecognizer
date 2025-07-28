@@ -1,0 +1,34 @@
+{
+  "state": {
+    "sensor": {
+      "plate_recognition_camera": {
+        "waiting_api": "Waiting for API",
+        "no_plates": "No plates detected",
+        "vehicle_no_plate": "Vehicle detected without plate",
+        "camera_unavailable": "Camera unavailable"
+      },
+      "recognized_car": {
+        "no_plates": "No plates detected",
+        "recognized": "Recognized: {plates}",
+        "not_recognized": "Not recognized: {plates}"
+      },
+      "last_recognized_car": {
+        "no_recognized": "No recognized plates"
+      },
+      "formatted_car_plates": {
+        "known_plates": "Known license plates",
+        "known_plates_count": "Known license plates ({count})",
+        "no_known_plates": "No known plates",
+        "manager_unavailable": "PlateManager unavailable"
+      }
+    }
+  },
+  "component": {
+    "enhanced_platerecognizer": {
+      "plate_manager": {
+        "no_plates": "No plates",
+        "select_to_delete": "Select plates to delete"
+      }
+    }
+  }
+}
