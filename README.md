@@ -2,7 +2,7 @@
 
 Fork of this integration: https://github.com/robmarkcole/HASS-plate-recognizer
 
-**Version 0.4.1**
+**Version 0.4.2**
 
 Example settings for configuration.yaml:
 
