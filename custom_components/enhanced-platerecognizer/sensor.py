@@ -65,65 +65,67 @@ async def async_setup_platform(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, create_sensors)
 
 class RozpoznaneTablesKameraSensor(RestoreEntity, SensorEntity):
-    """Sensor rozpoznane_tablice_kamera_X (zgodny z template)."""
+    """Sensor dla pojedynczej kamery, np. sensor.rozpoznane_tablice_kamera_1."""
 
     def __init__(self, hass: HomeAssistant, image_processing_entity: str, kamera_nr: int):
+        """Inicjalizacja sensora."""
         self.hass = hass
         self._image_processing_entity = image_processing_entity
         self._attr_name = f"Rozpoznane Tablice Kamera {kamera_nr}"
-        # Zapewnia unikalne ID, co rozwiązuje problem z komunikatem w UI
         self._attr_unique_id = f"enhanced_platerecognizer_kamera_{kamera_nr}"
         self.entity_id = f"sensor.rozpoznane_tablice_kamera_{kamera_nr}"
-        
-        # ZMIANA: Ustawienie domyślnego stanu zgodnego z Twoim wymaganiem
         self._attr_state = "Oczekiwanie na API"
         self._attr_extra_state_attributes = {}
 
-    # NOWE METODY - DO DODANIA
     async def async_added_to_hass(self) -> None:
-        """Wywoływane po dodaniu encji do HA. Ustawia nasłuchiwanie i stan."""
+        """Wywoływane po dodaniu encji do HA. Ustawia stan początkowy i nasłuchuje na zdarzenia."""
         await super().async_added_to_hass()
-        _LOGGER.info(f"Sensor {self.entity_id} has been added to Home Assistant.")
+        # Ta część jest POPRAWNA - gwarantuje stan "Oczekiwanie na API" po restarcie
+        self._attr_state = "Oczekiwanie na API"
+        _LOGGER.info(f"Sensor {self.entity_id}: Ustawiono stan początkowy na '{self._attr_state}'.")
 
-        # Nasłuchiwanie na dedykowany event jest bardziej wydajne niż śledzenie stanu
         self.async_on_remove(
             self.hass.bus.async_listen(
                 'enhanced_platerecognizer_image_processed',
                 self._handle_image_processed
             )
         )
-        _LOGGER.info(f"Sensor {self.entity_id} is now listening for 'enhanced_platerecognizer_image_processed' events from '{self._image_processing_entity}'.")
+        _LOGGER.info(f"Sensor {self.entity_id}: Rozpoczęto nasłuchiwanie na zdarzenia z '{self._image_processing_entity}'.")
+        
+        self.async_write_ha_state()
 
     @callback
     def _handle_image_processed(self, event: Any) -> None:
         """Obsługuje zdarzenie po przetworzeniu obrazu przez odpowiednią kamerę."""
-        # Sprawdzamy, czy event pochodzi z encji, którą ten sensor obserwuje
         if event.data.get('entity_id') != self._image_processing_entity:
             return
 
-        _LOGGER.debug(f"Sensor {self.entity_id} received a matching event.")
+        _LOGGER.debug(f"Sensor {self.entity_id}: Otrzymano pasujące zdarzenie z danymi: {event.data}")
         
         has_vehicles = event.data.get('has_vehicles', False)
         timestamp = event.data.get('timestamp', '')
+        
+        plates = []
 
         if has_vehicles:
             vehicles = event.data.get('vehicles', [])
             plates = [v.get('plate') for v in vehicles if v.get('plate')]
-            new_state_text = ', '.join(plates) if plates else 'Nie wykryto tablic'
+            # Jeśli są pojazdy, ale nie ma tablic, ustawiamy odpowiedni komunikat.
+            new_state_text = ', '.join(plates) if plates else 'Wykryto pojazd bez tablicy'
         else:
             new_state_text = 'Nie wykryto tablic'
         
-        new_state = f"{new_state_text} @ {timestamp}" if timestamp else new_state_text
+        new_state = f"{new_state_text} @ {timestamp}" if plates and timestamp else new_state_text
 
         if self._attr_state != new_state:
             self._attr_state = new_state
             self._attr_extra_state_attributes['last_update'] = timestamp
             self.async_write_ha_state()
-            _LOGGER.info(f"Sensor {self.entity_id} state updated to: '{new_state}'")
+            _LOGGER.info(f"Sensor {self.entity_id}: stan zaktualizowano na: '{new_state}'")
 
     @property
     def should_poll(self) -> bool:
-        """Wyłącza polling, ponieważ sensor jest aktualizowany przez eventy."""
+        """Wyłącza polling, ponieważ sensor jest aktualizowany przez zdarzenia."""
         return False
 
 class FormattedCarPlatesSensor(SensorEntity):

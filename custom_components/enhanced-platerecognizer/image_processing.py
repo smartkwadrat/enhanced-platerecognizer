@@ -25,6 +25,7 @@ from homeassistant.core import split_entity_id
 import homeassistant.helpers.config_validation as cv
 import homeassistant.util.dt as dt_util
 from homeassistant.util.pil import draw_box
+from datetime import datetime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -215,83 +216,110 @@ class PlateRecognizerEntity(ImageProcessingEntity):
         self._current_capture_count = 0
 
     def process_image(self, image):
-        """Process an image."""
+        """Przetwarza obraz, obsługuje błędy i ZAWSZE wysyła zdarzenie."""
         self._current_capture_count += 1
+        
+        # Resetowanie stanów na początku
         self._state = None
         self._results = {}
-        self._vehicles = [{}]
+        self._vehicles = [] # ZMIANA: Inicjalizujemy jako pustą listę, a nie listę z pustym słownikiem
         self._plates = []
         self._orientations = []
-        self._image = Image.open(io.BytesIO(bytearray(image)))
-        self._image_width, self._image_height = self._image.size
         
+        try:
+            self._image = Image.open(io.BytesIO(bytearray(image)))
+            self._image_width, self._image_height = self._image.size
+        except UnidentifiedImageError:
+            _LOGGER.error("Nie udało się otworzyć obrazu. Może być uszkodzony.")
+            self._state = "Błąd obrazu"
+            # Mimo błędu, wysyłamy zdarzenie - to jest KLUCZOWA ZMIANA
+            self.hass.bus.fire('enhanced_platerecognizer_image_processed', {
+                'entity_id': self.entity_id,
+                'has_vehicles': False,
+                'vehicles': [],
+                'timestamp': dt_util.now().strftime(DATETIME_FORMAT)
+            })
+            return # Kończymy działanie tej metody
+
         if self._regions == DEFAULT_REGIONS:
             regions = None
         else:
             regions = self._regions
         if self._detection_rule:
-            self._config.update({"detection_rule" : self._detection_rule})
+            self._config.update({"detection_rule": self._detection_rule})
         if self._region_strict:
             self._config.update({"region": self._region_strict})
+        
         try:
             _LOGGER.debug("Config: " + str(json.dumps(self._config)))
             response = requests.post(
-                self._server, 
-                data=dict(regions=regions, camera_id=self.name, mmc=self._mmc, config=json.dumps(self._config)),  
-                files={"upload": image}, 
-                headers=self._headers
+                self._server,
+                data=dict(regions=regions, camera_id=self.name, mmc=self._mmc, config=json.dumps(self._config)),
+                files={"upload": image},
+                headers=self._headers,
+                timeout=10 # Dobrą praktyką jest dodanie timeoutu
             ).json()
-            self._results = response["results"]
-            self._plates = get_plates(response['results'])
+            
+            self._results = response.get("results", [])
+            self._plates = get_plates(self._results)
             if self._mmc:
-                self._orientations = get_orientations(response['results'])
+                self._orientations = get_orientations(self._results)
+            
+            # Uproszczona i bardziej niezawodna logika tworzenia listy pojazdów
             self._vehicles = [
                 {
                     ATTR_PLATE: r["plate"],
                     ATTR_CONFIDENCE: r["score"],
                     ATTR_REGION_CODE: r["region"]["code"],
                     ATTR_VEHICLE_TYPE: r["vehicle"]["type"],
-                    ATTR_BOX_Y_CENTRE: (r["box"]["ymin"] + ((r["box"]["ymax"] - r["box"]["ymin"]) /2)),
-                    ATTR_BOX_X_CENTRE: (r["box"]["xmin"] + ((r["box"]["xmax"] - r["box"]["xmin"]) /2)),
+                    ATTR_BOX_Y_CENTRE: (r["box"]["ymin"] + ((r["box"]["ymax"] - r["box"]["ymin"]) / 2)),
+                    ATTR_BOX_X_CENTRE: (r["box"]["xmin"] + ((r["box"]["xmax"] - r["box"]["xmin"]) / 2)),
                 }
-                for r in self._results
+                for r in self._results if "plate" in r
             ]
+
+        except requests.RequestException as exc:
+            _LOGGER.error("Błąd połączenia z API Plate Recognizer: %s", exc)
+            self._state = "Błąd API"
+            self._vehicles = []
         except Exception as exc:
-            _LOGGER.error("platerecognizer error: %s", exc)
-            _LOGGER.error(f"platerecognizer api response: {response}")
+            _LOGGER.error("Nieoczekiwany błąd podczas przetwarzania w Plate Recognizer: %s", exc)
+            self._state = "Błąd przetwarzania"
+            self._vehicles = []
 
         current_time = dt_util.now().strftime(DATETIME_FORMAT)
+        
         if self._vehicles:
             self._last_detection = current_time
-            self._state = self._last_detection
-        else:
-            # Dodajemy prefix by odróżnić stan "brak tablic" od timestampu
+            # Używamy _plates, bo self._vehicles zawiera teraz więcej danych
+            self._state = ", ".join(self._plates)
+        elif self._state is None: # Jeśli nie było błędu, ale nie ma pojazdów
             self._state = f"no_vehicles_{current_time}"
-        
-        # Emituj specjalny event po każdym przetworzeniu obrazu
+
+        _LOGGER.info(f"Przygotowywanie zdarzenia dla {self.entity_id} z danymi: has_vehicles={bool(self._vehicles)}")
         self.hass.bus.fire('enhanced_platerecognizer_image_processed', {
             'entity_id': self.entity_id,
-            'has_vehicles': bool(self._vehicles and not all(v == {} for v in self._vehicles)),
+            'has_vehicles': bool(self._vehicles),
             'vehicles': self._vehicles,
             'timestamp': current_time
         })
 
         if self._save_file_folder:
-            if self._state or self._always_save_latest_file:
+            if self._vehicles or self._always_save_latest_file:
                 self.save_image()
+        
         if self._server == PLATE_READER_URL:
             self.get_statistics()
-        else:
+        elif "usage" in response:
             stats = response["usage"]
-            calls_remaining = stats["max_calls"] - stats["calls"]
+            calls_remaining = stats.get("max_calls", 0) - stats.get("calls", 0)
             stats.update({"calls_remaining": calls_remaining})
             self._statistics = stats
         
         if self._consecutive_captures and self._current_capture_count == 1:
-            # Zaplanuj dodatkowe skany wykorzystując stałe z modułu
             for i in range(1, REPEATS + 1):
                 self.hass.create_task(self._schedule_next_scan(DELAY * i))
-        # Reset licznika po wykonaniu wszystkich zaplanowanych skanów
+                
         if self._current_capture_count >= REPEATS + 1:
             self._current_capture_count = 0
 
