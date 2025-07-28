@@ -5,223 +5,126 @@ import asyncio
 from typing import Any, Dict, List
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback, CoreState
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.const import EVENT_HOMEASSISTANT_START
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "enhanced_platerecognizer"
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the sensor platform."""
-    _LOGGER.info("Enhanced Plate Recognizer: async_setup_platform called!")
-    
-    # NOWOŚĆ: Dodaj opóźnienie, aby image_processing się załadowało
-    await asyncio.sleep(5)
+async def async_setup_platform(
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None
+) -> None:
+    """Konfiguruje sensory platformy w sposób asynchroniczny i odporny na błędy."""
+    _LOGGER.info("Enhanced Plate Recognizer: async_setup_platform called. Waiting for Home Assistant to start.")
 
-    # SPRAWDŹ WSZYSTKIE ENCJE IMAGE_PROCESSING:
-    all_entities = hass.states.async_entity_ids('image_processing')
-    _LOGGER.info(f"Wszystkie encje image_processing: {all_entities}")
-    
-    # Znajdź encje z naszej integracji
-    image_processing_entities = []
-    for entity_id in all_entities:
-        if 'platerecognizer' in entity_id:
-            image_processing_entities.append(entity_id)
-            _LOGGER.info(f"Znaleziono encję platerecognizer: {entity_id}")
-    
-    _LOGGER.info(f"Encje do mapowania: {image_processing_entities}")
-    
-    # SPRAWDŹ CZY PLATEMANAGER JEST DOSTĘPNY
-    plate_manager = hass.data.get(DOMAIN, {}).get('plate_manager')
-    if plate_manager:
-        _LOGGER.info("PlateManager jest dostępny w hass.data")
-    else:
-        _LOGGER.error("PlateManager NIE JEST dostępny w hass.data!")
-    
-    sensors = []
-    
-    # Tworzenie sensorów dla każdej kamery
-    for i, entity_id in enumerate(image_processing_entities, 1):
-        _LOGGER.info(f"Tworzę sensory dla encji {entity_id} (kamera {i})")
+    @callback
+    def create_sensors(event: Any) -> None:
+        """Funkcja, która tworzy sensory po pełnym uruchomieniu Home Assistant."""
+        _LOGGER.info("Home Assistant started. Creating Enhanced Plate Recognizer sensors.")
         
-        # Sensor dla konkretnej kamery
-        kamera_sensor = RozpoznaneTablesKameraSensor(hass, entity_id, i)
-        sensors.append(kamera_sensor)
-        _LOGGER.info(f"Utworzono sensor: {kamera_sensor.entity_id} -> nasłuchuje: {entity_id}")
+        all_ip_entities = hass.states.async_entity_ids('image_processing')
+        image_processing_entities = [
+            entity_id for entity_id in all_ip_entities if 'platerecognizer' in entity_id
+        ]
         
-        # Wyciągnij nazwę kamery dla PlateRecognitionSensor
-        #camera_entity = f"camera.{entity_id.split('.')[-1].replace('platerecognizer_', '')}"
-        #last_detection_sensor = PlateRecognitionSensor(hass, entity_id, camera_entity)
-        #sensors.append(last_detection_sensor)
-        #_LOGGER.info(f"Utworzono sensor: {last_detection_sensor._attr_unique_id} -> nasłuchuje: {entity_id}")
-    
-    # Combined sensor
-    if image_processing_entities:
-        combined_sensor = CombinedPlatesSensor(hass, image_processing_entities)
-        sensors.append(combined_sensor)
-        _LOGGER.info(f"Utworzono combined sensor -> nasłuchuje: {image_processing_entities}")
+        if not image_processing_entities:
+            _LOGGER.warning("No 'platerecognizer' image_processing entities found. Sensors will not be created.")
+            return
+
+        _LOGGER.info(f"Found image_processing entities to use: {image_processing_entities}")
+
+        sensors_to_add = []
+        
+        for i, entity_id in enumerate(image_processing_entities, 1):
+            _LOGGER.info(f"Creating sensor for camera {i} linked to {entity_id}")
+            sensors_to_add.append(RozpoznaneTablesKameraSensor(hass, entity_id, i))
+
+        if image_processing_entities:
+            sensors_to_add.append(CombinedPlatesSensor(hass, image_processing_entities))
+        
+        sensors_to_add.extend([
+            LastRecognizedCarSensor(hass),
+            RecognizedCarSensor(hass),
+            FormattedCarPlatesSensor(hass)
+        ])
+
+        _LOGGER.info(f"Adding {len(sensors_to_add)} sensors to Home Assistant.")
+        async_add_entities(sensors_to_add, True)
+
+    if hass.state == CoreState.running:
+        create_sensors(None)
     else:
-        _LOGGER.warning("Brak encji image_processing - nie tworzę combined sensor")
-    
-    # Inne sensory
-    additional_sensors = [
-        LastRecognizedCarSensor(hass),
-        RecognizedCarSensor(hass),
-        FormattedCarPlatesSensor(hass)
-    ]
-    sensors.extend(additional_sensors)
-    
-    _LOGGER.info(f"Utworzono łącznie {len(sensors)} sensorów")
-    for sensor in sensors:
-        sensor_id = getattr(sensor, 'entity_id', getattr(sensor, '_attr_unique_id', 'unknown'))
-        _LOGGER.info(f"Sensor do dodania: {sensor_id}")
-    
-    async_add_entities(sensors, True)
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, create_sensors)
 
-
-class RozpoznaneTablesKameraSensor(SensorEntity):
+class RozpoznaneTablesKameraSensor(RestoreEntity, SensorEntity):
     """Sensor rozpoznane_tablice_kamera_X (zgodny z template)."""
 
     def __init__(self, hass: HomeAssistant, image_processing_entity: str, kamera_nr: int):
         self.hass = hass
         self._image_processing_entity = image_processing_entity
         self._attr_name = f"Rozpoznane Tablice Kamera {kamera_nr}"
-        self._attr_unique_id = f"rozpoznane_tablice_kamera_{kamera_nr}"
+        # Zapewnia unikalne ID, co rozwiązuje problem z komunikatem w UI
+        self._attr_unique_id = f"enhanced_platerecognizer_kamera_{kamera_nr}"
         self.entity_id = f"sensor.rozpoznane_tablice_kamera_{kamera_nr}"
-        self._attr_state = "Nie wykryto tablic"
+        
+        # ZMIANA: Ustawienie domyślnego stanu zgodnego z Twoim wymaganiem
+        self._attr_state = "Oczekiwanie na API"
+        self._attr_extra_state_attributes = {}
 
-    async def async_added_to_hass(self):
-        _LOGGER.info(f"Sensor {self.entity_id}: inicjalizacja rozpoczęta")
-        
-        # Nasłuchuj zmian stanu encji (backup)
-        async_track_state_change_event(
-            self.hass,
-            self._image_processing_entity,
-            self._handle_state_change
-        )
-        _LOGGER.info(f"Sensor {self.entity_id}: zarejestrowano nasłuchiwanie zmian stanu dla {self._image_processing_entity}")
-        
-        # Nasłuchuj specjalnego eventu (główny mechanizm)
-        self.hass.bus.async_listen(
-            'enhanced_platerecognizer_image_processed', 
-            self._handle_image_processed
-        )
-        _LOGGER.info(f"Sensor {self.entity_id}: zarejestrowano nasłuchiwanie eventu enhanced_platerecognizer_image_processed")
-        
-        # od razu pokaż stan domyślny zamiast "unknown"
-        self.async_write_ha_state()
-        self.hass.async_create_task(self._delayed_update())
-        _LOGGER.info(f"Sensor {self.entity_id}: inicjalizacja zakończona")
+    # NOWE METODY - DO DODANIA
+    async def async_added_to_hass(self) -> None:
+        """Wywoływane po dodaniu encji do HA. Ustawia nasłuchiwanie i stan."""
+        await super().async_added_to_hass()
+        _LOGGER.info(f"Sensor {self.entity_id} has been added to Home Assistant.")
 
-    async def _delayed_update(self):
-        await asyncio.sleep(5)
-        _LOGGER.info(f"Sensor {self.entity_id}: wykonuję delayed update")
-        self._update_state()
-        self.async_write_ha_state()
+        # Nasłuchiwanie na dedykowany event jest bardziej wydajne niż śledzenie stanu
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                'enhanced_platerecognizer_image_processed',
+                self._handle_image_processed
+            )
+        )
+        _LOGGER.info(f"Sensor {self.entity_id} is now listening for 'enhanced_platerecognizer_image_processed' events from '{self._image_processing_entity}'.")
 
     @callback
-    def _handle_state_change(self, event):
-        """Obsłuż zmianę stanu encji image_processing (backup mechanism)."""
-        _LOGGER.info(f"Sensor {self.entity_id}: otrzymał zmianę stanu (backup)")
-        self._update_state()
-        self.async_write_ha_state()
-
-    @callback
-    def _handle_image_processed(self, event):
-        """Obsłuż zdarzenie przetworzenia obrazu."""
-        event_entity = event.data.get('entity_id')
-        _LOGGER.info(f"Sensor {self.entity_id}: otrzymał event od {event_entity}, oczekuje od {self._image_processing_entity}")
-        
-        if event_entity == self._image_processing_entity:
-            _LOGGER.info(f"Sensor {self.entity_id}: event pasuje, przetwarzam dane")
-            
-            # Wykorzystaj dane bezpośrednio z eventu
-            if event.data.get('has_vehicles'):
-                vehicles = event.data.get('vehicles', [])
-                plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
-                plates_str = ', '.join(plates) if plates else 'Nie wykryto tablic'
-                _LOGGER.info(f"Sensor {self.entity_id}: znaleziono tablice: {plates_str}")
-            else:
-                plates_str = 'Nie wykryto tablic'
-                _LOGGER.info(f"Sensor {self.entity_id}: brak pojazdów")
-            
-            timestamp = event.data.get('timestamp', '').strip()
-            if timestamp:
-                new_state = f"{plates_str} @ {timestamp}"
-            else:
-                new_state = plates_str
-            
-            # KLUCZOWE: Sprawdź czy stan się rzeczywiście zmienia
-            if self._attr_state != new_state:
-                self._attr_state = new_state
-                _LOGGER.info(f"Sensor {self.entity_id}: ZMIENIAM stan z '{getattr(self, '_attr_state', 'unknown')}' na '{new_state}'")
-            else:
-                _LOGGER.info(f"Sensor {self.entity_id}: stan pozostaje bez zmian: '{new_state}'")
-                
-            # DODAJ atrybuty dla debugowania
-            self._attr_extra_state_attributes = {
-                'last_update': timestamp,
-                'vehicles_count': len(event.data.get('vehicles', [])),
-                'plates_count': len([v.get('plate') for v in event.data.get('vehicles', []) if v.get('plate') is not None]),
-                'event_entity': event_entity
-            }
-            
-            # Force update
-            self.async_write_ha_state()
-            _LOGGER.info(f"Sensor {self.entity_id}: async_write_ha_state() wywołane")
-        else:
-            _LOGGER.debug(f"Sensor {self.entity_id}: event od innej encji, ignoruję")
-
-    # DODAJ właściwość state
-    @property
-    def state(self):
-        """Return the state of the sensor."""
-        return self._attr_state
-
-    @property
-    def should_poll(self):
-        """No polling needed."""
-        return False
-
-    def _update_state(self):
-        """Aktualizuj stan na podstawie aktualnego stanu encji (backup method)."""
-        _LOGGER.debug(f"Sensor {self.entity_id}: _update_state wywołane")
-        image_processing = self.hass.states.get(self._image_processing_entity)
-        if not image_processing or image_processing.state in ["unavailable", "unknown"]:
-            self._attr_state = "Kamera niedostępna"
-            _LOGGER.warning(f"Sensor {self.entity_id}: encja {self._image_processing_entity} niedostępna")
+    def _handle_image_processed(self, event: Any) -> None:
+        """Obsługuje zdarzenie po przetworzeniu obrazu przez odpowiednią kamerę."""
+        # Sprawdzamy, czy event pochodzi z encji, którą ten sensor obserwuje
+        if event.data.get('entity_id') != self._image_processing_entity:
             return
 
-        vehicles = image_processing.attributes.get('vehicles', [])
-        last_detection = image_processing.attributes.get('last_detection', '')
+        _LOGGER.debug(f"Sensor {self.entity_id} received a matching event.")
+        
+        has_vehicles = event.data.get('has_vehicles', False)
+        timestamp = event.data.get('timestamp', '')
 
-        if vehicles:
-            plates = [v.get('plate') for v in vehicles if v.get('plate') is not None]
-            plates_str = ', '.join(plates) if plates else 'Nie wykryto tablic'
+        if has_vehicles:
+            vehicles = event.data.get('vehicles', [])
+            plates = [v.get('plate') for v in vehicles if v.get('plate')]
+            new_state_text = ', '.join(plates) if plates else 'Nie wykryto tablic'
         else:
-            plates_str = 'Nie wykryto tablic'
+            new_state_text = 'Nie wykryto tablic'
+        
+        new_state = f"{new_state_text} @ {timestamp}" if timestamp else new_state_text
 
-        if last_detection:
-            self._attr_state = f"{plates_str} @ {last_detection}"
-        else:
-            self._attr_state = plates_str
-            
-        _LOGGER.debug(f"Sensor {self.entity_id}: backup update - nowy stan: {self._attr_state}")
-    
-    @property
-    def state(self):
-        """Return the state of the sensor."""
-        return self._attr_state
+        if self._attr_state != new_state:
+            self._attr_state = new_state
+            self._attr_extra_state_attributes['last_update'] = timestamp
+            self.async_write_ha_state()
+            _LOGGER.info(f"Sensor {self.entity_id} state updated to: '{new_state}'")
 
     @property
-    def should_poll(self):
-        """No polling needed."""
+    def should_poll(self) -> bool:
+        """Wyłącza polling, ponieważ sensor jest aktualizowany przez eventy."""
         return False
-
 
 class FormattedCarPlatesSensor(SensorEntity):
     """Sensor z listą znanych tablic z właścicielami."""

@@ -32,9 +32,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         _LOGGER.error(f"Błąd podczas inicjalizacji PlateManager: {e}")
         return False
 
-    # NOWOŚĆ: Jawnie załaduj image_processing PRZED sensorami
-    await discovery.async_load_platform(hass, Platform.IMAGE_PROCESSING, DOMAIN, {}, config)
-
     # Jawnie załaduj sensor platform
     await discovery.async_load_platform(hass, Platform.SENSOR, DOMAIN, {}, config)
     _LOGGER.info("Enhanced Plate Recognizer: Sensor platform loaded")
