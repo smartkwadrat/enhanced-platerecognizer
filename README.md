@@ -53,7 +53,7 @@
 6. Add new settings to configuration.yaml
 
 
-## ⚙️ Example Configuration (`configuration.yaml`)
+## ⚙️ Example Configuration
 
 Add the following to your `configuration.yaml` (adapt paths/entities/api_token as needed):
 
@@ -174,7 +174,7 @@ mode: single
 ```
 
 
-### 🛑 Run Scan on Vehicle Detection
+### 🔍 Run Scan on Vehicle Detection
 
 ```yaml
 alias: Trigger Plate Scan on Vehicle Detection
@@ -192,7 +192,7 @@ action:
 mode: queued
 ```
 
-### 3️⃣ Send Notification When a New Unknown Plate is Recognized
+### 🔔 Send Notification When a New Unknown Plate is Recognized
 
 ```yaml
 alias: Notify on Unknown Plate Recognition
