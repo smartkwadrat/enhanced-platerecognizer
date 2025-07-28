@@ -296,7 +296,10 @@ class PlateRecognizerEntity(ImageProcessingEntity):
         elif self._state is None: # Jeśli nie było błędu, ale nie ma pojazdów
             self._state = f"no_vehicles_{current_time}"
 
+        _LOGGER.info(f"Wysyłanie eventu 'enhanced_platerecognizer_image_processed' dla {self.entity_id}")
+        _LOGGER.debug(f"Event data: entity_id={self.entity_id}, has_vehicles={bool(self._vehicles)}, vehicles_count={len(self._vehicles)}")
         _LOGGER.info(f"Przygotowywanie zdarzenia dla {self.entity_id} z danymi: has_vehicles={bool(self._vehicles)}")
+
         self.hass.bus.fire('enhanced_platerecognizer_image_processed', {
             'entity_id': self.entity_id,
             'has_vehicles': bool(self._vehicles),

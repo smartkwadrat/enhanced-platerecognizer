@@ -64,7 +64,7 @@ async def async_setup_platform(
     else:
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, create_sensors)
 
-class RozpoznaneTablesKameraSensor(RestoreEntity, SensorEntity):
+class RozpoznaneTablesKameraSensor(SensorEntity):
     """Sensor dla pojedynczej kamery, np. sensor.rozpoznane_tablice_kamera_1."""
 
     def __init__(self, hass: HomeAssistant, image_processing_entity: str, kamera_nr: int):
@@ -80,31 +80,41 @@ class RozpoznaneTablesKameraSensor(RestoreEntity, SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Wywoływane po dodaniu encji do HA. Ustawia stan początkowy i nasłuchuje na zdarzenia."""
         await super().async_added_to_hass()
-        # Ta część jest POPRAWNA - gwarantuje stan "Oczekiwanie na API" po restarcie
+        
+        # Ustaw domyślny stan
         self._attr_state = "Oczekiwanie na API"
-        _LOGGER.info(f"Sensor {self.entity_id}: Ustawiono stan początkowy na '{self._attr_state}'.")
+        self._attr_extra_state_attributes = {}
+        _LOGGER.info(f"Sensor {self.entity_id}: Ustawiono domyślny stan: 'Oczekiwanie na API'")
 
+        # Zarejestruj nasłuchiwanie na zdarzenia
         self.async_on_remove(
             self.hass.bus.async_listen(
                 'enhanced_platerecognizer_image_processed',
                 self._handle_image_processed
             )
         )
-        _LOGGER.info(f"Sensor {self.entity_id}: Rozpoczęto nasłuchiwanie na zdarzenia z '{self._image_processing_entity}'.")
         
+        _LOGGER.info(f"Sensor {self.entity_id}: Rozpoczęto nasłuchiwanie na zdarzenia z '{self._image_processing_entity}'.")
+
+        # Wymuś aktualizację stanu
         self.async_write_ha_state()
+        _LOGGER.info(f"Sensor {self.entity_id}: Stan zapisany w HA: '{self._attr_state}'")
 
     @callback
     def _handle_image_processed(self, event: Any) -> None:
         """Obsługuje zdarzenie po przetworzeniu obrazu przez odpowiednią kamerę."""
-        if event.data.get('entity_id') != self._image_processing_entity:
+        event_entity_id = event.data.get('entity_id')
+        
+        # Debug log dla lepszego diagnozowania
+        _LOGGER.debug(f"Sensor {self.entity_id}: Otrzymano event od '{event_entity_id}', oczekiwane: '{self._image_processing_entity}'")
+        
+        if event_entity_id != self._image_processing_entity:
             return
 
         _LOGGER.debug(f"Sensor {self.entity_id}: Otrzymano pasujące zdarzenie z danymi: {event.data}")
-        
+
         has_vehicles = event.data.get('has_vehicles', False)
         timestamp = event.data.get('timestamp', '')
-        
         plates = []
 
         if has_vehicles:
@@ -114,7 +124,7 @@ class RozpoznaneTablesKameraSensor(RestoreEntity, SensorEntity):
             new_state_text = ', '.join(plates) if plates else 'Wykryto pojazd bez tablicy'
         else:
             new_state_text = 'Nie wykryto tablic'
-        
+
         new_state = f"{new_state_text} @ {timestamp}" if plates and timestamp else new_state_text
 
         if self._attr_state != new_state:
@@ -122,6 +132,15 @@ class RozpoznaneTablesKameraSensor(RestoreEntity, SensorEntity):
             self._attr_extra_state_attributes['last_update'] = timestamp
             self.async_write_ha_state()
             _LOGGER.info(f"Sensor {self.entity_id}: stan zaktualizowano na: '{new_state}'")
+
+    def get_linked_image_processing_entity(self):
+        """Zwraca entity_id linkowanej encji image_processing dla debugowania."""
+        return self._image_processing_entity
+
+    @property
+    def state(self):
+        """Zwraca aktualny stan sensora."""
+        return self._attr_state
 
     @property
     def should_poll(self) -> bool:
