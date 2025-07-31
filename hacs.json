@@ -1,7 +1,11 @@
 {
-    "name": "Enhanced PlateRecognizer",
-    "homeassistant": "2025.1.0",
-    "render_readme": true,
-    "content_in_root": false,
-    "zip_release": false
-  }
+  "name": "Enhanced PlateRecognizer",
+  "homeassistant": "2024.1.0",
+  "render_readme": true,
+  "content_in_root": false,
+  "zip_release": false,
+  "domain": "enhanced_platerecognizer",
+  "country": [],
+  "iot_class": "Cloud-Polling",
+  "codeowners": ["@smartkwadrat"]
+}

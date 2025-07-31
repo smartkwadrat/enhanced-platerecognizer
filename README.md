@@ -80,14 +80,13 @@ image_processing:
 
 input_text:
   add_new_plate:
-  name: Add New Plate
-  min: 0
-  max: 255
-
-add_plate_owner:
-  name: Add Plate Owner
-  min: 0
-  max: 255
+    name: Add New Plate
+    min: 0
+    max: 255
+  add_plate_owner:
+    name: Add Plate Owner
+    min: 0
+    max: 255
 
 input_select:
   remove_plate:
@@ -220,5 +219,5 @@ Customize the entity IDs (e.g., switch.gate_open_trigger, binary_sensor.vehicle_
 - Supported languages: PL and EN
 - API token required from [platerecognizer.com](https://platerecognizer.com/).
 - You can configure which region's plates to recognize.
-- All entities use Home Assistant naming best practices and should auto-appear after correct configuration.
+- All entities use Home Assistant naming best practices and should auto-appear after correct configuration (input_text and input_select have to be created manually via configuration.yaml)
 - All configuration is done via YAML; no config flow UI.

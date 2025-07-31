@@ -1,6 +1,6 @@
 # Enhanced PlateRecognizer
 
-Fork integrac: https://github.com/robmarkcole/HASS-plate-recognizer
+Fork integracji: https://github.com/robmarkcole/HASS-plate-recognizer
 
 ## Funkcje
 - Zarządzanie tablicami
